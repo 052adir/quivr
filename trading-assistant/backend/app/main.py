@@ -20,10 +20,20 @@ from .analysis import summarize
 from .binance_client import BinanceClient, BinanceError
 from .config import settings
 from .database import SessionLocal, get_db, init_db
-from .models import Alert, ChatMessage, Connection, RoundTrip, User
-from .schemas import ChatIn, ConnectionIn, LoginIn, RegisterIn, SettingsIn, TokenOut
+from .models import Alert, ChatMessage, Connection, Lead, RoundTrip, User
+from .schemas import (
+    ChatIn,
+    ConnectionIn,
+    LeadIn,
+    LoginIn,
+    RegisterIn,
+    SettingsIn,
+    TokenOut,
+)
 
-FRONTEND_DIR = Path(__file__).resolve().parent.parent.parent / "frontend"
+ROOT_DIR = Path(__file__).resolve().parent.parent.parent
+FRONTEND_DIR = ROOT_DIR / "frontend"
+LANDING_DIR = ROOT_DIR / "landing"
 
 app = FastAPI(title="Mentor Trade", version="0.1.0")
 
@@ -289,6 +299,40 @@ def chat(
 
 
 # --------------------------------------------------------------------------- #
+# Marketing — public lead capture + affiliate tracking
+# --------------------------------------------------------------------------- #
+@app.post("/api/leads")
+def capture_lead(body: LeadIn, db: Session = Depends(get_db)):
+    if not body.email and not body.phone:
+        raise HTTPException(400, "email or phone required")
+    lead = Lead(
+        email=(body.email or "").strip() or None,
+        phone=(body.phone or "").strip() or None,
+        source=(body.source or "landing").strip()[:40],
+        ref_code=(body.ref_code or "").strip()[:40] or None,
+    )
+    db.add(lead)
+    db.commit()
+    return {"ok": True}
+
+
+@app.get("/api/leads")
+def list_leads(user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """Simple admin view of captured leads (any logged-in user, for the MVP)."""
+    rows = db.scalars(select(Lead).order_by(Lead.created_at.desc())).all()
+    return [
+        {
+            "email": r.email,
+            "phone": r.phone,
+            "source": r.source,
+            "ref_code": r.ref_code,
+            "created_at": r.created_at.isoformat(),
+        }
+        for r in rows
+    ]
+
+
+# --------------------------------------------------------------------------- #
 # Helpers
 # --------------------------------------------------------------------------- #
 _WEAKNESS_LABELS = {
@@ -330,13 +374,24 @@ def _weekly_summary(stats: dict, weakness: str | None) -> str:
 
 
 # --------------------------------------------------------------------------- #
-# Static frontend
+# Static frontend + public marketing landing
 # --------------------------------------------------------------------------- #
 if FRONTEND_DIR.exists():
     app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
 
+    @app.get("/app")
+    def app_index():
+        return FileResponse(FRONTEND_DIR / "index.html")
+
+
+if LANDING_DIR.exists():
+    # Root is the public, conversion-focused marketing page; the product lives at /app.
     @app.get("/")
-    def index():
+    def landing():
+        return FileResponse(LANDING_DIR / "index.html")
+elif FRONTEND_DIR.exists():
+    @app.get("/")
+    def root_to_app():
         return FileResponse(FRONTEND_DIR / "index.html")
 
 

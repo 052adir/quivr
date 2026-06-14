@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>מנטור — הבוט שמלמד אותך לסחור בלי לאבד את הכסף</title>
+  <meta name="description" content="מנטור מתחבר לחשבון המסחר שלך בקריאה בלבד, מזהה את הטעויות שעולות לך כסף, ומאמן אותך בזמן אמת. 7 ימי ניסיון חינם." />
+  <meta property="og:title" content="מנטור — מאמן המסחר האישי שלך" />
+  <meta property="og:description" content="הבוט שרואה כל עסקה שלך ועוצר אותך לפני הטעות הבאה. 7 ימי ניסיון חינם, ₪79/חודש." />
+  <style>
+    :root{
+      --bg:#0b1020; --panel:#141a2e; --panel2:#1b2238; --border:#283153;
+      --text:#e7ecf6; --muted:#939fc0; --brand:#4f8cff; --brand2:#6ee7b7;
+      --warn:#f5a524; --danger:#f04b5e; --success:#2ecc8f; --radius:16px;
+    }
+    *{box-sizing:border-box}
+    html,body{margin:0;padding:0}
+    body{font-family:"Segoe UI","Assistant",system-ui,-apple-system,sans-serif;
+      background:radial-gradient(1100px 560px at 85% -10%,#18224a 0,transparent 55%),var(--bg);
+      color:var(--text);direction:rtl;line-height:1.6;-webkit-font-smoothing:antialiased}
+    a{color:inherit;text-decoration:none}
+    .wrap{max-width:1040px;margin:0 auto;padding:0 20px}
+    .brand{font-weight:800;font-size:22px;background:linear-gradient(90deg,var(--brand),var(--brand2));
+      -webkit-background-clip:text;background-clip:text;color:transparent}
+    /* nav */
+    nav{position:sticky;top:0;z-index:30;backdrop-filter:blur(8px);
+      background:rgba(11,16,32,.72);border-bottom:1px solid var(--border)}
+    nav .wrap{display:flex;align-items:center;gap:14px;height:62px}
+    nav .spacer{flex:1}
+    .btn{display:inline-block;padding:12px 20px;border-radius:11px;font-weight:700;font-size:15px;
+      border:none;cursor:pointer;text-align:center;transition:.15s}
+    .btn.primary{background:linear-gradient(90deg,var(--brand),#6ea0ff);color:#fff}
+    .btn.primary:hover{filter:brightness(1.08);transform:translateY(-1px)}
+    .btn.ghost{background:transparent;border:1px solid var(--border);color:var(--text)}
+    .btn.big{padding:15px 28px;font-size:17px}
+    .btn.block{display:block;width:100%}
+    /* hero */
+    header{padding:70px 0 40px;text-align:center}
+    .pill{display:inline-block;background:var(--panel2);border:1px solid var(--border);
+      color:var(--brand2);padding:6px 14px;border-radius:30px;font-size:13px;margin-bottom:22px}
+    h1{font-size:46px;line-height:1.15;margin:0 0 18px;font-weight:850;letter-spacing:-.5px}
+    h1 .hl{color:var(--brand)}
+    .sub{font-size:19px;color:var(--muted);max-width:680px;margin:0 auto 30px}
+    .cta-row{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-bottom:14px}
+    .reassure{font-size:13px;color:var(--muted)}
+    .reassure b{color:var(--text)}
+    /* mock dashboard */
+    .mock{margin:46px auto 0;max-width:760px;background:var(--panel);border:1px solid var(--border);
+      border-radius:var(--radius);padding:18px;box-shadow:0 30px 80px rgba(0,0,0,.45)}
+    .mock .bar{display:flex;gap:6px;margin-bottom:14px}
+    .mock .bar span{width:11px;height:11px;border-radius:50%;background:#33406b}
+    .mock-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px}
+    .mc{background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:12px}
+    .mc .l{font-size:11px;color:var(--muted)} .mc .v{font-size:20px;font-weight:800;margin-top:4px}
+    .v.pos{color:var(--success)} .v.neg{color:var(--danger)}
+    .mock-alert{display:flex;gap:10px;background:var(--panel2);border:1px solid var(--border);
+      border-inline-start:4px solid var(--warn);border-radius:10px;padding:11px 12px;text-align:right}
+    .mock-alert.win{border-inline-start-color:var(--success)}
+    .mock-alert .t{font-weight:700;font-size:14px} .mock-alert .m{font-size:12.5px;color:var(--muted)}
+    /* sections */
+    section{padding:56px 0}
+    h2{font-size:32px;text-align:center;margin:0 0 12px;font-weight:800}
+    .lead{text-align:center;color:var(--muted);max-width:660px;margin:0 auto 40px;font-size:17px}
+    .grid{display:grid;gap:16px}
+    .g3{grid-template-columns:repeat(3,1fr)}
+    .g2{grid-template-columns:repeat(2,1fr)}
+    .card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:24px}
+    .card .ico{font-size:26px;margin-bottom:10px}
+    .card h3{margin:0 0 8px;font-size:18px}
+    .card p{margin:0;color:var(--muted);font-size:14.5px}
+    .step-n{width:34px;height:34px;border-radius:50%;background:var(--brand);color:#fff;
+      display:grid;place-items:center;font-weight:800;margin-bottom:12px}
+    .pain{border-inline-start:4px solid var(--danger)}
+    /* pricing */
+    .price-wrap{max-width:440px;margin:0 auto}
+    .price-card{background:var(--panel);border:2px solid var(--brand);border-radius:20px;padding:32px;text-align:center;
+      box-shadow:0 30px 80px rgba(79,140,255,.18)}
+    .price{font-size:52px;font-weight:850;margin:6px 0}
+    .price small{font-size:18px;color:var(--muted);font-weight:600}
+    .price-card ul{list-style:none;padding:0;margin:22px 0;text-align:right}
+    .price-card li{padding:8px 0;border-bottom:1px solid var(--border);font-size:15px}
+    .price-card li::before{content:"✓ ";color:var(--success);font-weight:800}
+    .trial-tag{display:inline-block;background:rgba(46,204,143,.14);color:var(--success);
+      padding:6px 14px;border-radius:30px;font-size:13px;margin-bottom:8px}
+    /* testimonials */
+    .quote{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:20px}
+    .quote p{margin:0 0 12px;font-size:15px}
+    .quote .who{color:var(--muted);font-size:13px}
+    .stars{color:var(--warn);margin-bottom:8px}
+    /* affiliate */
+    .affil{background:linear-gradient(90deg,rgba(79,140,255,.12),rgba(110,231,183,.10));
+      border:1px solid var(--border);border-radius:var(--radius);padding:28px;text-align:center}
+    /* lead form */
+    .lead-form{max-width:480px;margin:0 auto;background:var(--panel);border:1px solid var(--border);
+      border-radius:var(--radius);padding:26px}
+    .lead-form input{width:100%;padding:13px;margin-bottom:12px;background:var(--panel2);
+      border:1px solid var(--border);border-radius:10px;color:var(--text);font-size:15px}
+    .lead-form input:focus{outline:none;border-color:var(--brand)}
+    .form-note{font-size:12.5px;color:var(--muted);text-align:center;margin-top:10px}
+    .ok-msg{color:var(--success);text-align:center;font-weight:700;margin-top:10px;min-height:20px}
+    /* faq */
+    details{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px 18px;margin-bottom:10px}
+    summary{cursor:pointer;font-weight:700;font-size:16px;list-style:none}
+    summary::-webkit-details-marker{display:none}
+    details[open] summary{color:var(--brand)}
+    details p{color:var(--muted);margin:12px 0 0;font-size:14.5px}
+    /* footer */
+    footer{border-top:1px solid var(--border);padding:34px 0;color:var(--muted);font-size:13px;text-align:center}
+    .disclaimer{max-width:760px;margin:14px auto 0;font-size:12px;color:#6b769a;line-height:1.7}
+    @media(max-width:760px){
+      h1{font-size:34px} .g3,.g2,.mock-grid{grid-template-columns:1fr}
+      nav .hide-m{display:none}
+    }
+  </style>
+</head>
+<body>
+  <nav>
+    <div class="wrap">
+      <div class="brand">מנטור 📈</div>
+      <a href="#how" class="hide-m" style="color:var(--muted)">איך זה עובד</a>
+      <a href="#pricing" class="hide-m" style="color:var(--muted)">מחיר</a>
+      <a href="#faq" class="hide-m" style="color:var(--muted)">שאלות</a>
+      <div class="spacer"></div>
+      <a class="btn primary" data-cta href="/app">7 ימי ניסיון חינם</a>
+    </div>
+  </nav>
+
+  <!-- HERO -->
+  <header>
+    <div class="wrap">
+      <span class="pill">⚡ חדש · מאמן AI אישי לסוחרים מתחילים</span>
+      <h1>הבוט ש<span class="hl">רואה כל עסקה</span> שלך<br/>ועוצר אותך לפני הטעות הבאה</h1>
+      <p class="sub">
+        מתחברים פעם אחת לחשבון המסחר (בקריאה בלבד), ומנטור מתעד כל עסקה, מזהה את
+        הדפוסים שעולים לך כסף — מסחר נקמה, פוזיציות גדולות מדי, מסחר בלי stop-loss —
+        ומאמן אותך בזמן אמת. בלי איתותים. בלי הבטחות שווא. רק שתשתפר.
+      </p>
+      <div class="cta-row">
+        <a class="btn primary big" data-cta href="/app">התחל 7 ימי ניסיון חינם →</a>
+        <a class="btn ghost big" href="#how">איך זה עובד?</a>
+      </div>
+      <div class="reassure">
+        ✓ בלי כרטיס אשראי לניסיון &nbsp;·&nbsp; ✓ חיבור <b>read-only</b> — לא נוגעים בכסף &nbsp;·&nbsp; ✓ ביטול בכל רגע
+      </div>
+
+      <!-- mock dashboard -->
+      <div class="mock">
+        <div class="bar"><span></span><span></span><span></span></div>
+        <div class="mock-grid">
+          <div class="mc"><div class="l">אחוז הצלחה</div><div class="v">39%</div></div>
+          <div class="mc"><div class="l">רווח/הפסד מצטבר</div><div class="v neg">-$1,748</div></div>
+          <div class="mc"><div class="l">Profit Factor</div><div class="v">0.1</div></div>
+        </div>
+        <div class="mock-alert" style="margin-bottom:8px">
+          <div>⚠️</div><div><div class="t">מסחר נקמה (revenge trade)</div>
+          <div class="m">פתחת עסקה חדשה ב-ETHUSDT רק 8 דקות אחרי הפסד — הדפוס שהכי פוגע בך.</div></div>
+        </div>
+        <div class="mock-alert win">
+          <div>✅</div><div><div class="t">עסקה מנצחת לפי התוכנית</div>
+          <div class="m">יפה! יצאת ב-BTCUSDT ברווח של 3.5% — ככה נראית עסקה ממושמעת.</div></div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- PROBLEM -->
+  <section>
+    <div class="wrap">
+      <h2>למה 90% מהמתחילים מפסידים?</h2>
+      <p class="lead">זה כמעט אף פעם לא חוסר ב"טיפים חמים". זה אותן 3 טעויות, שוב ושוב.</p>
+      <div class="grid g3">
+        <div class="card pain"><div class="ico">😡</div><h3>מסחר נקמה</h3>
+          <p>אחרי הפסד נכנסים מהר כדי "להחזיר" — ומפסידים שוב. הדפוס ההרסני ביותר.</p></div>
+        <div class="card pain"><div class="ico">📉</div><h3>בלי Stop-Loss</h3>
+          <p>הפסד קטן הופך לאסון כי אין רף יציאה מוגדר מראש. עסקה אחת מוחקת חודש.</p></div>
+        <div class="card pain"><div class="ico">🎰</div><h3>פוזיציה גדולה מדי</h3>
+          <p>מגדילים סיכון כש"בטוחים" — ומרוקנים את החשבון בעסקה אחת לא צפויה.</p></div>
+      </div>
+      <p class="lead" style="margin-top:34px">
+        מנטור מזהה בדיוק את אלה — אצלך אישית — ומראה לך אותם שחור על גבי לבן.
+      </p>
+    </div>
+  </section>
+
+  <!-- HOW -->
+  <section id="how" style="background:rgba(20,26,46,.4)">
+    <div class="wrap">
+      <h2>שלושה צעדים. דקתיים. וזהו.</h2>
+      <p class="lead">המשתמש כמעט לא עושה כלום — מתחבר פעם אחת, וזה רץ ברקע.</p>
+      <div class="grid g3">
+        <div class="card"><div class="step-n">1</div><h3>נרשמים ומתחברים</h3>
+          <p>מדביקים מפתח API בקריאה בלבד מהבורסה (Binance). 2 דקות, בלי סיכון — המפתח לא יכול לסחור או למשוך כסף.</p></div>
+        <div class="card"><div class="step-n">2</div><h3>ממשיכים לסחור רגיל</h3>
+          <p>אתה סוחר כרגיל בבורסה שלך. מנטור פשוט צופה ברקע, מתעד כל עסקה ולומד את הדפוסים שלך.</p></div>
+        <div class="card"><div class="step-n">3</div><h3>מקבלים אימון בזמן אמת</h3>
+          <p>התראות על טעויות, חיזוק על הצלחות, יומן אוטומטי וסקירה שבועית — ישר לטלגרם או לאפליקציה.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FEATURES -->
+  <section>
+    <div class="wrap">
+      <h2>מה אתה מקבל</h2>
+      <p class="lead">כל מה שצריך כדי להפסיק לחזור על אותן טעויות — ולהתחיל להשתפר באמת.</p>
+      <div class="grid g2">
+        <div class="card"><div class="ico">📓</div><h3>יומן מסחר אוטומטי</h3>
+          <p>כל עסקה נרשמת לבד עם רווח/הפסד, זמן החזקה וגודל — בלי שתקליד כלום.</p></div>
+        <div class="card"><div class="ico">🧠</div><h3>זיהוי דפוסים אישי</h3>
+          <p>"אתה מפסיד ב-80% מהעסקאות שאתה פותח אחרי הפסד." משוב שמבוסס עליך, לא על כללים גנריים.</p></div>
+        <div class="card"><div class="ico">⚡</div><h3>התראות בזמן אמת</h3>
+          <p>ישר לטלגרם — אזהרה על טעות מוכרת, חיזוק על עסקה ממושמעת. בלי לפתוח שום מסך.</p></div>
+        <div class="card"><div class="ico">📅</div><h3>סקירה שבועית</h3>
+          <p>כל ראשון: הביצועים שלך, החולשה הבולטת של השבוע, והיעד לשבוע הבא.</p></div>
+        <div class="card"><div class="ico">🎓</div><h3>מורה־AI לכל שאלה</h3>
+          <p>"למה הפסדתי פה?" "מה זה RSI?" — תשובות מותאמות לרמה שלך, בכל שעה.</p></div>
+        <div class="card"><div class="ico">🛡️</div><h3>ניהול סיכונים</h3>
+          <p>מסלול למידה מדורג שמלמד את ההרגל שמפריד בין מי ששורד למי שנשרף.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PRICING -->
+  <section id="pricing" style="background:rgba(20,26,46,.4)">
+    <div class="wrap">
+      <h2>מחיר אחד. הכול כלול.</h2>
+      <p class="lead">פחות ממה שעולה לך טעות אחת בלי stop-loss.</p>
+      <div class="price-wrap">
+        <div class="price-card">
+          <span class="trial-tag">🎁 7 ימי ניסיון חינם</span>
+          <div class="price">₪79<small> /חודש</small></div>
+          <ul>
+            <li>חיבור לחשבון המסחר (קריאה בלבד)</li>
+            <li>יומן מסחר אוטומטי מלא</li>
+            <li>זיהוי דפוסים והתראות בזמן אמת</li>
+            <li>דחיפת התראות לטלגרם</li>
+            <li>סקירה שבועית אישית</li>
+            <li>מורה־AI ללא הגבלה</li>
+            <li>מסלול למידה מדורג</li>
+          </ul>
+          <a class="btn primary block big" data-cta href="/app">התחל 7 ימי ניסיון חינם</a>
+          <div class="form-note">בלי כרטיס אשראי · ביטול בכל רגע</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- TESTIMONIALS -->
+  <section>
+    <div class="wrap">
+      <h2>מה סוחרים אומרים</h2>
+      <p class="lead">* עדויות לדוגמה — יוחלפו בעדויות אמת מהמשתמשים הראשונים.</p>
+      <div class="grid g3">
+        <div class="quote"><div class="stars">★★★★★</div>
+          <p>"גיליתי שאני עושה revenge trade כמעט כל יום בלי לשים לב. תוך שבועיים הפסקתי. זה לבד שווה את המנוי."</p>
+          <div class="who">— ד׳, סוחר קריפטו מתחיל</div></div>
+        <div class="quote"><div class="stars">★★★★★</div>
+          <p>"היומן האוטומטי שינה לי את המשחק. סוף סוף אני רואה את הדפוסים שלי במספרים במקום בתחושות."</p>
+          <div class="who">— מ׳, מסחר במשרה חלקית</div></div>
+        <div class="quote"><div class="stars">★★★★★</div>
+          <p>"ההתראה בטלגרם 'פתחת בלי stop' תפסה אותי בדיוק בזמן. עזר לי לעצור הרגל יקר."</p>
+          <div class="who">— ע׳, סוחר מניות</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- AFFILIATE -->
+  <section>
+    <div class="wrap">
+      <div class="affil">
+        <h2 style="margin-top:0">משפיען או מנהל קבוצת מסחר?</h2>
+        <p class="lead" style="margin-bottom:20px">
+          הצטרף לתוכנית השותפים שלנו — קוד הטבה אישי לעוקבים שלך, ועמלה חוזרת על כל מנוי שנשאר.
+        </p>
+        <a class="btn primary big" href="#lead" onclick="setSource('affiliate')">אני רוצה להיות שותף →</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- LEAD CAPTURE -->
+  <section id="lead" style="background:rgba(20,26,46,.4)">
+    <div class="wrap">
+      <h2>קבל גישה מוקדמת + קוד הטבה</h2>
+      <p class="lead">השאר טלפון/אימייל ונשלח לך קישור ישיר להתחלה והטבת השקה.</p>
+      <div class="lead-form">
+        <input id="lead-name-phone" type="tel" placeholder="מספר טלפון (וואטסאפ)" />
+        <input id="lead-email" type="email" placeholder="אימייל (אופציונלי)" />
+        <button class="btn primary block big" id="lead-submit">שלחו לי גישה 🚀</button>
+        <div class="ok-msg" id="lead-ok"></div>
+        <div class="form-note">לא נשלח ספאם. רק קישור ההתחלה והטבת ההשקה.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FAQ -->
+  <section id="faq">
+    <div class="wrap" style="max-width:760px">
+      <h2>שאלות נפוצות</h2>
+      <div style="margin-top:30px">
+        <details open><summary>זה בטוח לחבר את חשבון המסחר שלי?</summary>
+          <p>כן. אתה נותן מפתח API ב<b>קריאה בלבד</b> (read-only) — הוא יכול רק לראות עסקאות, ולא יכול לסחור, להעביר או למשוך כסף. אנחנו רק צופים ומלמדים.</p></details>
+        <details><summary>זה ייעוץ השקעות? אתם נותנים איתותים?</summary>
+          <p>לא ולא. מנטור הוא כלי <b>חינוכי</b> בלבד — הוא מלמד ניהול סיכון, משמעת ופסיכולוגיה, ומראה לך את הדפוסים שלך. הוא לא ממליץ מה לקנות או למכור.</p></details>
+        <details><summary>אילו בורסות נתמכות?</summary>
+          <p>בשלב הראשון Binance (קריפטו), עם התראות בזמן אמת. מט"ח ומניות בדרך — הירשם וקבל עדכון כשהן עולות.</p></details>
+        <details><summary>אני ממש מתחיל. זה בשבילי?</summary>
+          <p>בדיוק בשבילך. אפשר לפתוח חשבון דמו ולראות איך הכול עובד עוד לפני שאתה מחבר חשבון אמיתי. המורה־AI עונה על כל שאלה בגובה העיניים.</p></details>
+        <details><summary>איך מבטלים?</summary>
+          <p>בלחיצה אחת, בכל רגע. הניסיון 7 ימים חינם ובלי כרטיס אשראי — מתחייבים רק אם זה עוזר לך.</p></details>
+      </div>
+      <div style="text-align:center;margin-top:34px">
+        <a class="btn primary big" data-cta href="/app">התחל 7 ימי ניסיון חינם →</a>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="wrap">
+      <div class="brand" style="font-size:18px">מנטור 📈</div>
+      <p>מאמן המסחר האישי שלך · © 2026</p>
+      <p class="disclaimer">
+        מנטור הוא כלי חינוכי בלבד ואינו מהווה ייעוץ השקעות, שיווק השקעות או המלצה לבצע
+        עסקה כלשהי. מסחר בשוק ההון, מט"ח וקריפטו כרוך בסיכון להפסד ההון. כל החלטת מסחר
+        היא באחריות המשתמש בלבד.
+      </p>
+    </div>
+  </footer>
+
+  <script>
+    // Capture affiliate ref + traffic source from the URL (?ref=CODE&src=telegram).
+    const params = new URLSearchParams(location.search);
+    const ref = params.get("ref") || localStorage.getItem("mentor_ref") || "";
+    let source = params.get("src") || "landing";
+    if (ref) localStorage.setItem("mentor_ref", ref);
+
+    // Carry the ref through to the app signup links.
+    document.querySelectorAll("[data-cta]").forEach((a) => {
+      if (ref) a.href = "/app?ref=" + encodeURIComponent(ref);
+    });
+
+    window.setSource = (s) => { source = s; };
+
+    document.getElementById("lead-submit").addEventListener("click", async () => {
+      const phone = document.getElementById("lead-name-phone").value.trim();
+      const email = document.getElementById("lead-email").value.trim();
+      const ok = document.getElementById("lead-ok");
+      if (!phone && !email) { ok.textContent = "הזן טלפון או אימייל"; return; }
+      ok.textContent = "שולח…";
+      try {
+        const res = await fetch("/api/leads", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ phone, email, source, ref_code: ref }),
+        });
+        if (!res.ok) throw new Error();
+        ok.textContent = "✓ מעולה! נשלח לך קישור ההתחלה בקרוב.";
+        document.getElementById("lead-name-phone").value = "";
+        document.getElementById("lead-email").value = "";
+      } catch {
+        ok.textContent = "אופס, נסה שוב בעוד רגע.";
+      }
+    });
+  </script>
+</body>
+</html>

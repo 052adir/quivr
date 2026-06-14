@@ -130,3 +130,17 @@ class ChatMessage(Base):
     role: Mapped[str] = mapped_column(String(12))  # user / assistant
     content: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, index=True)
+
+
+class Lead(Base):
+    """A marketing lead captured from the public landing page."""
+
+    __tablename__ = "leads"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    phone: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    # Marketing source ("telegram", "whatsapp", "landing", ...) and affiliate code.
+    source: Mapped[str] = mapped_column(String(40), default="landing")
+    ref_code: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, index=True)

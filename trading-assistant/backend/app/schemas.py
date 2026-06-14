@@ -34,3 +34,10 @@ class ConnectionIn(BaseModel):
 
 class ChatIn(BaseModel):
     message: str = Field(min_length=1)
+
+
+class LeadIn(BaseModel):
+    email: str | None = None
+    phone: str | None = None
+    source: str = "landing"
+    ref_code: str | None = None

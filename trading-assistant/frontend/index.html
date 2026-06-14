@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>מנטור — מאמן המסחר האישי שלך</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <!-- ===================== Auth ===================== -->
+  <div id="auth" class="auth-wrap">
+    <div class="auth-card">
+      <div class="brand-logo">מנטור 📈</div>
+      <div class="tagline">מאמן המסחר האישי שלך — לומדים, מתעדים, משתפרים.</div>
+
+      <div class="field">
+        <label>אימייל</label>
+        <input id="auth-email" type="email" placeholder="you@example.com" />
+      </div>
+      <div class="field">
+        <label>סיסמה</label>
+        <input id="auth-password" type="password" placeholder="לפחות 6 תווים" />
+      </div>
+      <button class="btn" id="auth-submit">התחברות / הרשמה</button>
+      <div class="error-msg" id="auth-error"></div>
+      <div class="switch-line">
+        מתחבר לחשבון קיים? המערכת תזהה אוטומטית. אין חשבון? ניצור לך אחד.
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== App ===================== -->
+  <div id="app" class="app">
+    <div class="topbar">
+      <div class="brand-logo">מנטור 📈</div>
+      <div class="nav" id="nav">
+        <button data-view="dashboard" class="active">לוח בקרה</button>
+        <button data-view="journal">יומן מסחר</button>
+        <button data-view="alerts">התראות <span class="dot hidden" id="alert-dot"></span></button>
+        <button data-view="lessons">למידה</button>
+        <button data-view="tutor">המורה־AI</button>
+        <button data-view="settings">חיבור והגדרות</button>
+      </div>
+      <button class="btn ghost" id="logout">התנתק</button>
+    </div>
+
+    <div class="content">
+      <!-- Dashboard -->
+      <section class="view active" id="view-dashboard">
+        <h2 class="view-title">לוח בקרה</h2>
+        <p class="view-sub">תמונת מצב של המסחר שלך, מתעדכנת אוטומטית.</p>
+        <div class="cards" id="stat-cards"></div>
+
+        <div class="panel">
+          <h3>סקירה שבועית</h3>
+          <p class="note" id="weekly-summary">טוען…</p>
+        </div>
+
+        <div class="panel">
+          <h3>עקומת רווח/הפסד מצטבר</h3>
+          <canvas id="equity-chart"></canvas>
+        </div>
+
+        <div class="panel">
+          <h3>התראות אחרונות</h3>
+          <div id="recent-alerts"></div>
+        </div>
+      </section>
+
+      <!-- Journal -->
+      <section class="view" id="view-journal">
+        <h2 class="view-title">יומן מסחר</h2>
+        <p class="view-sub">כל עסקה סגורה — נרשמת אוטומטית, בלי שתקליד כלום.</p>
+        <div class="panel">
+          <div id="journal-table"></div>
+        </div>
+      </section>
+
+      <!-- Alerts -->
+      <section class="view" id="view-alerts">
+        <div class="row">
+          <div>
+            <h2 class="view-title">התראות וזיהוי דפוסים</h2>
+            <p class="view-sub">החולשות והחוזקות שהמנטור זיהה אצלך.</p>
+          </div>
+          <div class="spacer"></div>
+          <button class="btn small secondary" id="mark-read">סמן הכל כנקרא</button>
+        </div>
+        <div class="panel"><div id="alerts-list"></div></div>
+      </section>
+
+      <!-- Lessons -->
+      <section class="view" id="view-lessons">
+        <h2 class="view-title">מסלול למידה</h2>
+        <p class="view-sub">שלב אחרי שלב — מהיסודות ועד משמעת מתקדמת.</p>
+        <div class="panel"><div id="lessons-list"></div></div>
+      </section>
+
+      <!-- Tutor -->
+      <section class="view" id="view-tutor">
+        <h2 class="view-title">המורה־AI</h2>
+        <p class="view-sub">שאל כל שאלה על מסחר, סיכון או פסיכולוגיה. (חינוכי בלבד — לא ייעוץ.)</p>
+        <div class="panel chat-box">
+          <div class="chat-log" id="chat-log"></div>
+          <div class="chat-input">
+            <input id="chat-input" placeholder="לדוגמה: מה זה stop-loss?" />
+            <button class="btn" id="chat-send">שלח</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Settings -->
+      <section class="view" id="view-settings">
+        <h2 class="view-title">חיבור והגדרות</h2>
+        <p class="view-sub">חבר את חשבון המסחר שלך פעם אחת — בקריאה בלבד.</p>
+
+        <div class="panel">
+          <h3>חיבור חשבון</h3>
+          <p class="note">
+            מפתח API בקריאה־בלבד (read-only) בלבד — הוא לא יכול לסחור או למשוך כסף.
+            רוצה רק לראות איך זה עובד? הזן <b>DEMO</b> בשדה המפתח כדי לטעון נתוני דמו.
+          </p>
+          <div class="row" style="margin-top:12px">
+            <div class="field" style="flex:1; min-width:200px">
+              <label>API Key (או DEMO)</label>
+              <input id="conn-key" placeholder="DEMO" />
+            </div>
+            <div class="field" style="flex:1; min-width:200px">
+              <label>API Secret</label>
+              <input id="conn-secret" placeholder="(לא נדרש בדמו)" />
+            </div>
+          </div>
+          <div class="field">
+            <label>סמלים למעקב (מופרדים בפסיק)</label>
+            <input id="conn-symbols" value="BTCUSDT,ETHUSDT,SOLUSDT" />
+          </div>
+          <button class="btn small" id="conn-save">חבר וסנכרן</button>
+          <div class="error-msg" id="conn-error"></div>
+          <div id="conn-list" style="margin-top:16px"></div>
+        </div>
+
+        <div class="panel">
+          <h3>הגדרות</h3>
+          <div class="field">
+            <label>גודל החשבון (USD) — לחישוב סיכון</label>
+            <input id="set-account" type="number" value="1000" />
+          </div>
+          <div class="field">
+            <label>Telegram Chat ID (אופציונלי — להתראות בזמן אמת)</label>
+            <input id="set-telegram" placeholder="למשל 123456789" />
+          </div>
+          <button class="btn small" id="set-save">שמור הגדרות</button>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="/static/app.js"></script>
+</body>
+</html>

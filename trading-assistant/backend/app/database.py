@@ -34,3 +34,30 @@ def init_db() -> None:
     from . import models  # noqa: F401
 
     Base.metadata.create_all(bind=engine)
+    _migrate()
+
+
+# Columns added after the first release. SQLite supports ADD COLUMN, so we patch
+# existing tables in place (a lightweight stand-in for Alembic on SQLite).
+_NEW_COLUMNS = {
+    "connections": [
+        ("provider", "VARCHAR(32) DEFAULT 'demo'"),
+        ("meta_enc", "TEXT DEFAULT ''"),
+    ],
+    "users": [
+        ("telegram_link_code", "VARCHAR(16)"),
+    ],
+}
+
+
+def _migrate() -> None:
+    if not settings.database_url.startswith("sqlite"):
+        return  # real DBs should use Alembic; nothing to patch here
+    with engine.begin() as conn:
+        for table, cols in _NEW_COLUMNS.items():
+            existing = {
+                row[1] for row in conn.exec_driver_sql(f"PRAGMA table_info({table})")
+            }
+            for name, ddl in cols:
+                if name not in existing:
+                    conn.exec_driver_sql(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}")

@@ -6,6 +6,7 @@ security headers, CORS, health checks, rate limiting, encrypted credentials,
 Stripe billing) are wired in here.
 """
 
+import json
 import logging
 import secrets
 import threading
@@ -26,6 +27,7 @@ from . import (
     __version__,
     access,
     billing,
+    connectors,
     crypto,
     education,
     ratelimit,
@@ -34,7 +36,6 @@ from . import (
     telegram_bot,
 )
 from .analysis import summarize
-from .binance_client import BinanceClient, BinanceError
 from .config import settings
 from .database import SessionLocal, get_db, init_db
 from .models import Alert, ChatMessage, Connection, Lead, RoundTrip, User
@@ -281,7 +282,7 @@ def list_connections(user: User = Depends(current_user), db: Session = Depends(g
     return [
         {
             "id": c.id,
-            "exchange": c.exchange,
+            "provider": c.provider,
             "label": c.label,
             "symbols": c.symbols,
             "is_demo": c.is_demo,
@@ -291,32 +292,61 @@ def list_connections(user: User = Depends(current_user), db: Session = Depends(g
     ]
 
 
+# Default labels + symbol hints per platform.
+_PROVIDER_DEFAULTS = {
+    "demo": "חשבון דמו",
+    "binance": "Binance",
+    "ccxt": "בורסת קריפטו",
+    "mt5": "MetaTrader 5",
+}
+
+
 @app.post("/api/connections")
 def add_connection(
     body: ConnectionIn, user: User = Depends(require_access), db: Session = Depends(get_db)
 ):
-    is_demo = body.api_key.strip().upper() == "DEMO"
-    if not is_demo:
-        # Verify a real (read-only) key before saving, for instant feedback.
-        try:
-            BinanceClient(body.api_key, body.api_secret).verify()
-        except BinanceError as exc:
-            raise HTTPException(400, f"could not verify Binance key: {exc}")
+    provider = (body.provider or "binance").strip().lower()
+    if body.api_key.strip().upper() == "DEMO":
+        provider = "demo"
+    if provider not in connectors.SUPPORTED_PROVIDERS:
+        raise HTTPException(400, f"פלטפורמה לא נתמכת: {provider}")
 
+    # Map the request onto the generic Connection shape (creds + encrypted meta).
+    meta: dict = {}
+    api_key, api_secret = "", ""
+    if provider == "binance":
+        api_key, api_secret = body.api_key.strip(), body.api_secret.strip()
+    elif provider == "ccxt":
+        api_key, api_secret = body.api_key.strip(), body.api_secret.strip()
+        meta = {"exchange": (body.exchange or "binance").strip().lower()}
+    elif provider == "mt5":
+        api_secret = body.password.strip()  # investor (read-only) password
+        meta = {"login": body.login.strip(), "server": body.server.strip()}
+
+    label = body.label or _PROVIDER_DEFAULTS.get(provider, provider)
     conn = Connection(
         user_id=user.id,
-        exchange=body.exchange,
-        label="חשבון דמו" if is_demo else body.label,
-        is_demo=is_demo,
-        api_key_enc=crypto.encrypt("" if is_demo else body.api_key.strip()),
-        api_secret_enc=crypto.encrypt("" if is_demo else body.api_secret.strip()),
+        provider=provider,
+        exchange=meta.get("exchange", "binance"),
+        label=label,
+        is_demo=(provider == "demo"),
+        api_key_enc=crypto.encrypt(api_key),
+        api_secret_enc=crypto.encrypt(api_secret),
+        meta_enc=crypto.encrypt(json.dumps(meta)) if meta else "",
         symbols=body.symbols,
     )
+
+    # Validate credentials before saving (instant feedback). Demo has no check.
+    try:
+        connectors.verify(conn)
+    except connectors.ConnectorError as exc:
+        raise HTTPException(400, str(exc))
+
     db.add(conn)
     db.commit()
     db.refresh(user)
     result = sync_service.sync_user(db, user)
-    return {"id": conn.id, "is_demo": is_demo, **result}
+    return {"id": conn.id, "provider": provider, "is_demo": conn.is_demo, **result}
 
 
 @app.delete("/api/connections/{conn_id}")

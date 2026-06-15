@@ -6,4 +6,7 @@ python-dotenv==1.0.1
 anthropic>=0.40.0
 cryptography==44.0.0
 stripe==11.4.1
+ccxt==4.5.58
+# MetaTrader5 is Windows-only; the marker keeps Linux/Docker installs working.
+MetaTrader5==5.0.5735; platform_system == "Windows"
 pytest==8.3.4

@@ -11,26 +11,9 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from . import crypto, patterns, telegram
+from . import connectors, patterns, telegram
 from .analysis import build_round_trips
-from .binance_client import BinanceClient, normalize_trade
-from .mock_data import generate_demo_trades
-from .models import Alert, Connection, RoundTrip, Trade, User
-
-
-def _fetch_fills(conn: Connection) -> list[dict]:
-    """Return normalized fills for a connection (demo or live Binance)."""
-    if conn.is_demo:
-        return generate_demo_trades()
-
-    client = BinanceClient(
-        crypto.decrypt(conn.api_key_enc), crypto.decrypt(conn.api_secret_enc)
-    )
-    fills: list[dict] = []
-    for symbol in [s.strip().upper() for s in conn.symbols.split(",") if s.strip()]:
-        for raw in client.my_trades(symbol):
-            fills.append(normalize_trade(symbol, raw))
-    return fills
+from .models import Alert, RoundTrip, Trade, User
 
 
 def _store_trades(db: Session, user_id: int, fills: list[dict]) -> int:
@@ -46,6 +29,24 @@ def _store_trades(db: Session, user_id: int, fills: list[dict]) -> int:
             continue
         db.add(Trade(user_id=user_id, **f))
         existing.add(f["external_id"])
+        new_count += 1
+    db.flush()
+    return new_count
+
+
+def _store_round_trips_direct(db: Session, user_id: int, trips: list[dict]) -> int:
+    """Insert connector-provided closed round-trips (e.g. MT5). Dedup by key."""
+    if not trips:
+        return 0
+    existing = set(
+        db.scalars(select(RoundTrip.dedup_key).where(RoundTrip.user_id == user_id)).all()
+    )
+    new_count = 0
+    for t in trips:
+        if t["dedup_key"] in existing:
+            continue
+        db.add(RoundTrip(user_id=user_id, **t))
+        existing.add(t["dedup_key"])
         new_count += 1
     db.flush()
     return new_count
@@ -109,11 +110,12 @@ def sync_user(db: Session, user: User) -> dict:
     new_trades = 0
     for conn in user.connections:
         try:
-            fills = _fetch_fills(conn)
+            result = connectors.fetch(conn)
         except Exception as exc:  # one bad connection shouldn't kill the sync
-            print(f"[sync] connection {conn.id} failed: {exc}")
+            print(f"[sync] connection {conn.id} ({conn.provider}) failed: {exc}")
             continue
-        new_trades += _store_trades(db, user.id, fills)
+        new_trades += _store_trades(db, user.id, result.fills)
+        _store_round_trips_direct(db, user.id, result.round_trips)
         conn.last_synced_at = datetime.now(timezone.utc).replace(tzinfo=None)
 
     _rebuild_round_trips(db, user.id)

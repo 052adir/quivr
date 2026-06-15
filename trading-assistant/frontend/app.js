@@ -400,6 +400,8 @@ function renderTrialBanner(a) {
   }
 }
 
+const PROVIDER_LABELS = { demo: "דמו", binance: "Binance", ccxt: "קריפטו", mt5: "MT5" };
+
 async function loadConnections() {
   const conns = await api("/connections");
   $("conn-list").innerHTML = conns.length
@@ -409,7 +411,7 @@ async function loadConnections() {
             <div class="icon">🔗</div>
             <div style="flex:1">
               <div class="a-title">${c.label}
-                ${c.is_demo ? '<span class="pill-demo">דמו</span>' : ""}</div>
+                <span class="pill-demo">${PROVIDER_LABELS[c.provider] || c.provider}</span></div>
               <div class="a-msg">${c.symbols} ·
                 ${c.last_synced_at ? "סונכרן " + new Date(c.last_synced_at).toLocaleString("he-IL") : "טרם סונכרן"}</div>
             </div>
@@ -417,7 +419,7 @@ async function loadConnections() {
           </div>`
         )
         .join("")
-    : '<div class="empty">אין עדיין חיבורים. הזן DEMO לטעינת נתוני דמו.</div>';
+    : '<div class="empty">אין עדיין חיבורים. בחר "דמו" לטעינת נתוני הדגמה.</div>';
 }
 
 window.deleteConn = async (id) => {
@@ -426,26 +428,37 @@ window.deleteConn = async (id) => {
   loadConnections();
 };
 
+// Show only the fields relevant to the chosen platform.
+function updateConnFields() {
+  const p = $("conn-provider").value;
+  $("grp-crypto").classList.toggle("hidden", !(p === "binance" || p === "ccxt"));
+  $("grp-exchange").classList.toggle("hidden", p !== "ccxt");
+  $("grp-mt5").classList.toggle("hidden", p !== "mt5");
+}
+$("conn-provider").addEventListener("change", updateConnFields);
+updateConnFields();
+
 $("conn-save").addEventListener("click", async () => {
   const err = $("conn-error");
   err.textContent = "";
-  const key = $("conn-key").value.trim();
-  if (!key) {
-    err.textContent = "הזן מפתח API או DEMO";
-    return;
+  const provider = $("conn-provider").value;
+  const body = { provider };
+  if (provider === "binance" || provider === "ccxt") {
+    body.api_key = $("conn-key").value.trim();
+    body.api_secret = $("conn-secret").value.trim();
+    body.symbols = $("conn-symbols").value.trim();
+    if (provider === "ccxt") body.exchange = $("conn-exchange").value.trim();
+    if (!body.api_key) { err.textContent = "הזן API key"; return; }
+  } else if (provider === "mt5") {
+    body.login = $("conn-login").value.trim();
+    body.server = $("conn-server").value.trim();
+    body.password = $("conn-password").value.trim();
+    if (!body.password || !body.server) { err.textContent = "נדרשים Server וסיסמת משקיע"; return; }
   }
   try {
-    const r = await api("/connections", {
-      method: "POST",
-      body: {
-        api_key: key,
-        api_secret: $("conn-secret").value.trim(),
-        symbols: $("conn-symbols").value.trim(),
-      },
-    });
+    const r = await api("/connections", { method: "POST", body });
     toast(`סונכרן! ${r.new_trades} עסקאות, ${r.new_alerts} התראות חדשות.`);
-    $("conn-key").value = "";
-    $("conn-secret").value = "";
+    ["conn-key", "conn-secret", "conn-password"].forEach((id) => { if ($(id)) $(id).value = ""; });
     await Promise.all([loadConnections(), loadDashboard()]);
   } catch (e) {
     err.textContent = e.message;

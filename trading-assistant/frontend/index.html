@@ -118,23 +118,64 @@
         <div class="panel">
           <h3>חיבור חשבון</h3>
           <p class="note">
-            מפתח API בקריאה־בלבד (read-only) בלבד — הוא לא יכול לסחור או למשוך כסף.
-            רוצה רק לראות איך זה עובד? הזן <b>DEMO</b> בשדה המפתח כדי לטעון נתוני דמו.
+            חיבור <b>קריאה־בלבד</b> בלבד — לא ניתן לסחור או למשוך כסף. בחר את
+            הפלטפורמה שבה אתה סוחר. רוצה רק לראות איך זה עובד? בחר <b>דמו</b>.
           </p>
-          <div class="row" style="margin-top:12px">
-            <div class="field" style="flex:1; min-width:200px">
-              <label>API Key (או DEMO)</label>
-              <input id="conn-key" placeholder="DEMO" />
+
+          <div class="field" style="margin-top:12px">
+            <label>פלטפורמה</label>
+            <select id="conn-provider">
+              <option value="demo">דמו (נתוני הדגמה)</option>
+              <option value="binance">Binance (קריפטו)</option>
+              <option value="ccxt">בורסת קריפטו אחרת (Bybit/OKX/Kraken...)</option>
+              <option value="mt5">MetaTrader 5 (מט"ח / CFD / מניות)</option>
+            </select>
+          </div>
+
+          <!-- ccxt: choose exchange -->
+          <div class="field hidden" id="grp-exchange">
+            <label>בורסה (ccxt id)</label>
+            <input id="conn-exchange" value="bybit" placeholder="bybit / okx / kraken ..." />
+          </div>
+
+          <!-- crypto creds (binance + ccxt) -->
+          <div id="grp-crypto" class="hidden">
+            <div class="row">
+              <div class="field" style="flex:1; min-width:200px">
+                <label>API Key</label>
+                <input id="conn-key" placeholder="read-only API key" />
+              </div>
+              <div class="field" style="flex:1; min-width:200px">
+                <label>API Secret</label>
+                <input id="conn-secret" />
+              </div>
             </div>
-            <div class="field" style="flex:1; min-width:200px">
-              <label>API Secret</label>
-              <input id="conn-secret" placeholder="(לא נדרש בדמו)" />
+            <div class="field">
+              <label>סמלים למעקב (מופרדים בפסיק)</label>
+              <input id="conn-symbols" value="BTCUSDT,ETHUSDT,SOLUSDT" />
+              <div class="note" id="symbols-hint">פורמט Binance: BTCUSDT. ב-ccxt: BTC/USDT.</div>
             </div>
           </div>
-          <div class="field">
-            <label>סמלים למעקב (מופרדים בפסיק)</label>
-            <input id="conn-symbols" value="BTCUSDT,ETHUSDT,SOLUSDT" />
+
+          <!-- MT5 creds -->
+          <div id="grp-mt5" class="hidden">
+            <p class="note">השתמש ב<b>סיסמת המשקיע (Investor / read-only)</b> — לא בסיסמה הראשית. ודא ש-MT5 פתוח במחשב.</p>
+            <div class="row">
+              <div class="field" style="flex:1; min-width:140px">
+                <label>Login (מספר חשבון)</label>
+                <input id="conn-login" placeholder="12345678" />
+              </div>
+              <div class="field" style="flex:2; min-width:200px">
+                <label>Server</label>
+                <input id="conn-server" placeholder="MetaQuotes-Demo / Broker-Live" />
+              </div>
+            </div>
+            <div class="field">
+              <label>Investor Password (read-only)</label>
+              <input id="conn-password" type="password" />
+            </div>
           </div>
+
           <button class="btn small" id="conn-save">חבר וסנכרן</button>
           <div class="error-msg" id="conn-error"></div>
           <div id="conn-list" style="margin-top:16px"></div>

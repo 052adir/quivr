@@ -9,7 +9,8 @@
 
 ## סטטוס נוכחי: v0.2.0 (MVP מוקשח, רץ ועובר בדיקות)
 
-עובד ונבדק מקצה לקצה (36 בדיקות `pytest` עוברות):
+עובד ונבדק מקצה לקצה (44 בדיקות `pytest` עוברות):
+- **רב-פלטפורמי** (`app/connectors.py`): demo · Binance · **ccxt** (100+ בורסות קריפטו) · **MT5** (מט"ח/CFD/מניות, סיסמת משקיע read-only). הוספת פלטפורמה = פונקציה אחת ב-registry
 - חיבור Binance read-only (HMAC, בלי SDK) + מצב **DEMO** עם נתונים מציאותיים
 - התאמת FIFO של עסקאות → round-trips + סטטיסטיקות
 - מנוע דפוסים: מסחר נקמה, פוזיציה גדולה מדי, בלי stop-loss, מסחר יתר, החזקת מפסידות, רצף ניצחון
@@ -31,6 +32,7 @@ trading-assistant/
       config.py         # הגדרות מ-env
       database.py       # SQLAlchemy engine/session
       models.py         # User, Connection, Trade, RoundTrip, Alert, ChatMessage, Lead
+      connectors.py     # שכבת מחברים רב-פלטפורמית (demo/binance/ccxt/mt5) + registry
       binance_client.py # לקוח REST read-only (HMAC)
       mock_data.py      # פיד DEMO סינתטי
       analysis.py       # בניית round-trips (FIFO) + summarize
@@ -92,7 +94,8 @@ docker compose up --build
 ## משימות פתוחות מומלצות (Roadmap)
 
 - [ ] חיבור Stripe אמיתי מקצה לקצה (Price ID של ₪79) + בדיקת webhook עם `stripe listen`
-- [ ] הרחבה למט"ח/מניות (מעבר ל-CCXT או ברוקרים נוספים)
+- [x] הרחבה למט"ח/מניות + רב-פלטפורמי (ccxt + MT5) — בוצע ב-v0.3
+- [ ] בדיקת MT5 חיה מול חשבון אמיתי (טרמינל פתוח + סיסמת משקיע) — **לא 52874606**
 - [ ] לוח אדמין: לידים, המרות, מעקב שותפים/אפיליאייט
 - [ ] WebSocket לזיהוי עסקאות מהיר יותר (במקום polling)
 - [ ] מעבר ל-PostgreSQL + מיגרציות (Alembic)

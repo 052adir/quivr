@@ -25,11 +25,18 @@ class SettingsIn(BaseModel):
 
 
 class ConnectionIn(BaseModel):
-    exchange: str = "binance"
-    label: str = "Binance"
-    api_key: str
+    # Platform: demo | binance | ccxt | mt5 (api_key == "DEMO" also -> demo).
+    provider: str = "binance"
+    label: str | None = None
+    # crypto (binance / ccxt)
+    api_key: str = ""
     api_secret: str = ""
+    exchange: str = "binance"  # ccxt exchange id, e.g. binance / bybit / okx / kraken
     symbols: str = "BTCUSDT,ETHUSDT,SOLUSDT"
+    # MetaTrader 5
+    login: str = ""
+    server: str = ""
+    password: str = ""  # the read-only *investor* password
 
 
 class ChatIn(BaseModel):

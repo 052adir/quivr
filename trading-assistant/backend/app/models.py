@@ -60,11 +60,16 @@ class Connection(Base):
     exchange: Mapped[str] = mapped_column(String(32), default="binance")
     label: Mapped[str] = mapped_column(String(64), default="Binance")
 
+    # Which connector handles this account: demo | binance | ccxt | mt5.
+    provider: Mapped[str] = mapped_column(String(32), default="demo")
     # is_demo enables the synthetic feed (no real network calls).
     is_demo: Mapped[bool] = mapped_column(Boolean, default=False)
-    # Exchange credentials, encrypted at rest (see app/crypto.py).
+    # Credentials, encrypted at rest (see app/crypto.py). Meaning is per-provider:
+    #   binance/ccxt -> api_key / secret ; mt5 -> api_secret holds the password.
     api_key_enc: Mapped[str] = mapped_column(Text, default="")
     api_secret_enc: Mapped[str] = mapped_column(Text, default="")
+    # Encrypted JSON for provider-specific extras (e.g. ccxt exchange id, MT5 login/server).
+    meta_enc: Mapped[str] = mapped_column(Text, default="")
     # Which symbols to pull executed trades for.
     symbols: Mapped[str] = mapped_column(String(255), default="BTCUSDT,ETHUSDT,SOLUSDT")
 
@@ -98,6 +103,11 @@ class RoundTrip(Base):
     """A closed position: one or more buys matched (FIFO) against sells."""
 
     __tablename__ = "round_trips"
+    # dedup_key is unique *per user* — demo data is deterministic, so different
+    # users legitimately share the same key.
+    __table_args__ = (
+        UniqueConstraint("user_id", "dedup_key", name="uq_user_roundtrip"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
@@ -112,13 +122,17 @@ class RoundTrip(Base):
     pnl_pct: Mapped[float] = mapped_column(Float)
     hold_seconds: Mapped[int] = mapped_column(Integer)
     # Stable fingerprint so repeated syncs don't duplicate closed trades.
-    dedup_key: Mapped[str] = mapped_column(String(80), unique=True, index=True)
+    dedup_key: Mapped[str] = mapped_column(String(80), index=True)
 
 
 class Alert(Base):
     """A coaching insight produced by the pattern engine."""
 
     __tablename__ = "alerts"
+    # dedup_key is unique *per user* (see RoundTrip note).
+    __table_args__ = (
+        UniqueConstraint("user_id", "dedup_key", name="uq_user_alert"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
@@ -127,7 +141,7 @@ class Alert(Base):
     title: Mapped[str] = mapped_column(String(120))
     message: Mapped[str] = mapped_column(Text)
     symbol: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    dedup_key: Mapped[str] = mapped_column(String(120), unique=True, index=True)
+    dedup_key: Mapped[str] = mapped_column(String(120), index=True)
     delivered: Mapped[bool] = mapped_column(Boolean, default=False)
     read: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, index=True)

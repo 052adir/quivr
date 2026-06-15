@@ -34,6 +34,7 @@ from . import (
     ratelimit,
     security,
     sync_service,
+    telegram,
     telegram_bot,
 )
 from .analysis import summarize
@@ -43,6 +44,7 @@ from .models import Alert, ChatMessage, Connection, Lead, RoundTrip, User
 from .schemas import (
     ChatIn,
     ConnectionIn,
+    EAEventIn,
     LeadIn,
     LoginIn,
     RegisterIn,
@@ -524,6 +526,46 @@ def capture_lead(body: LeadIn, request: Request, db: Session = Depends(get_db)):
     )
     db.add(lead)
     db.commit()
+    return {"ok": True}
+
+
+@app.post("/api/ea/event")
+def ea_event(body: EAEventIn, request: Request, db: Session = Depends(get_db)):
+    """Receive a live alert from the MT5 MentorGuard EA and fan it out.
+
+    Authenticated by the user's account token (the EA can't send a bearer
+    header). Stores it in the alert feed and pushes it to Telegram.
+    """
+    ratelimit.limit(request, key="ea", max_calls=120, window_secs=60)
+    user = db.scalar(select(User).where(User.token == body.token.strip()))
+    if not user:
+        raise HTTPException(401, "invalid token")
+
+    ref = (body.ref or body.message)[:60]
+    dedup = f"ea|{body.type}|{body.symbol or ''}|{ref}"
+    existing = db.scalar(
+        select(Alert).where(Alert.user_id == user.id, Alert.dedup_key == dedup)
+    )
+    if existing:
+        return {"ok": True, "duplicate": True}
+
+    alert = Alert(
+        user_id=user.id,
+        type=body.type[:40],
+        severity=(body.severity or "warning")[:12],
+        title="התראה חיה מ-MT5",
+        message=body.message,
+        symbol=(body.symbol or None),
+        dedup_key=dedup,
+    )
+    db.add(alert)
+    db.commit()
+
+    if user.telegram_chat_id:
+        icon = {"warning": "⚠️", "success": "✅", "info": "💡"}.get(alert.severity, "•")
+        if telegram.send_message(user.telegram_chat_id, f"{icon} {alert.message}"):
+            alert.delivered = True
+            db.commit()
     return {"ok": True}
 
 

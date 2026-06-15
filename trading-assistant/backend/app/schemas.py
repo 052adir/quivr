@@ -48,3 +48,13 @@ class LeadIn(BaseModel):
     phone: str | None = None
     source: str = "landing"
     ref_code: str | None = None
+
+
+class EAEventIn(BaseModel):
+    """A live alert pushed by the MT5 MentorGuard Expert Advisor."""
+    token: str
+    type: str
+    message: str
+    symbol: str | None = None
+    ref: str | None = None
+    severity: str = "warning"

@@ -225,3 +225,35 @@ canvas { max-height: 260px; }
 }
 .overlay-card h3 { margin: 14px 0 8px; }
 .overlay-card .btn { margin-top: 14px; }
+
+/* ---------- Beginner diagnosis card ---------- */
+.diagnosis {
+  background: linear-gradient(135deg, rgba(79,140,255,.14), rgba(110,231,183,.10));
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 22px;
+  margin-bottom: 20px;
+}
+.diagnosis .dx-head { font-size: 22px; font-weight: 800; margin-bottom: 14px; }
+.diagnosis .dx-money {
+  background: var(--panel-2); border: 1px solid var(--border);
+  border-radius: 10px; padding: 12px 14px; font-size: 14px; margin-bottom: 14px;
+}
+.diagnosis .dx-good { color: var(--success); font-size: 14px; margin-bottom: 12px; }
+.diagnosis .dx-problem { font-size: 15px; margin-bottom: 8px; }
+.diagnosis .dx-analogy {
+  color: var(--muted); font-size: 14px; font-style: italic;
+  border-inline-start: 3px solid var(--brand); padding-inline-start: 12px; margin-bottom: 18px;
+}
+.diagnosis .dx-action-title { font-weight: 800; font-size: 16px; margin-bottom: 12px; }
+.dx-step {
+  display: flex; gap: 12px; align-items: flex-start;
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 10px; padding: 13px 14px; margin-bottom: 10px;
+}
+.dx-step .num {
+  flex: none; width: 28px; height: 28px; border-radius: 50%;
+  background: var(--brand); color: #fff; font-weight: 800;
+  display: grid; place-items: center; font-size: 14px;
+}
+.dx-step .txt { font-size: 14.5px; line-height: 1.6; }

@@ -149,6 +149,7 @@ function money(n) {
 async function loadDashboard() {
   const [d, review] = await Promise.all([api("/dashboard"), api("/review/weekly")]);
   const s = d.stats;
+  loadDiagnosis().catch(() => {});
 
   const cards = [
     { label: "עסקאות סגורות", value: s.trades },
@@ -214,6 +215,27 @@ function drawEquity(points) {
       },
     },
   });
+}
+
+async function loadDiagnosis() {
+  const dx = await api("/diagnosis");
+  const el = $("diagnosis-card");
+  if (dx.kind === "empty") {
+    el.innerHTML =
+      `<div class="dx-head">🔍 ${dx.headline}</div><div class="dx-money">${dx.money}</div>`;
+    return;
+  }
+  const steps = (dx.steps || [])
+    .map((s, i) => `<div class="dx-step"><div class="num">${i + 1}</div><div class="txt">${s}</div></div>`)
+    .join("");
+  el.innerHTML =
+    `<div class="dx-head">🎯 ${dx.headline}</div>` +
+    (dx.good_news ? `<div class="dx-good">👍 ${dx.good_news}</div>` : "") +
+    `<div class="dx-money">${dx.money}</div>` +
+    (dx.problem ? `<div class="dx-problem">${dx.problem}</div>` : "") +
+    (dx.analogy ? `<div class="dx-analogy">${dx.analogy}</div>` : "") +
+    `<div class="dx-action-title">${dx.action_title}</div>` +
+    steps;
 }
 
 function alertHTML(a) {

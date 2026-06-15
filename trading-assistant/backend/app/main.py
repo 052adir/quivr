@@ -29,6 +29,7 @@ from . import (
     billing,
     connectors,
     crypto,
+    diagnosis,
     education,
     ratelimit,
     security,
@@ -402,6 +403,14 @@ def dashboard(user: User = Depends(require_access), db: Session = Depends(get_db
         "recent_alerts": [_alert_dict(a) for a in alerts],
         "has_unread": unread is not None,
     }
+
+
+@app.get("/api/diagnosis")
+def get_diagnosis(user: User = Depends(require_access), db: Session = Depends(get_db)):
+    trips = db.scalars(
+        select(RoundTrip).where(RoundTrip.user_id == user.id)
+    ).all()
+    return diagnosis.build_diagnosis(trips, user.account_size)
 
 
 @app.get("/api/trades")

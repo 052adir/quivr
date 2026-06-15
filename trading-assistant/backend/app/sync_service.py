@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from . import patterns, telegram
+from . import crypto, patterns, telegram
 from .analysis import build_round_trips
 from .binance_client import BinanceClient, normalize_trade
 from .mock_data import generate_demo_trades
@@ -20,10 +20,12 @@ from .models import Alert, Connection, RoundTrip, Trade, User
 
 def _fetch_fills(conn: Connection) -> list[dict]:
     """Return normalized fills for a connection (demo or live Binance)."""
-    if conn.api_key.strip().upper() == "DEMO":
+    if conn.is_demo:
         return generate_demo_trades()
 
-    client = BinanceClient(conn.api_key, conn.api_secret)
+    client = BinanceClient(
+        crypto.decrypt(conn.api_key_enc), crypto.decrypt(conn.api_secret_enc)
+    )
     fills: list[dict] = []
     for symbol in [s.strip().upper() for s in conn.symbols.split(",") if s.strip()]:
         for raw in client.my_trades(symbol):

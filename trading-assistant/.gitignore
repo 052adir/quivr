@@ -1,5 +1,8 @@
 backend/.venv/
 backend/.env
 backend/*.db
+backend/.secret_key
 __pycache__/
 *.pyc
+.pytest_cache/
+data/

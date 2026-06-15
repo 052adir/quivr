@@ -1,0 +1,26 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      MENTOR_ENV: production
+      # REQUIRED in production: a long random secret for credential encryption.
+      MENTOR_SECRET_KEY: ${MENTOR_SECRET_KEY:?set MENTOR_SECRET_KEY}
+      APP_BASE_URL: ${APP_BASE_URL:-http://localhost:8000}
+      DATABASE_URL: sqlite:////data/mentor_trade.db
+      # Optional integrations.
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      MENTOR_CHAT_MODEL: ${MENTOR_CHAT_MODEL:-claude-sonnet-4-6}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_PRICE_ID: ${STRIPE_PRICE_ID:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+    volumes:
+      - mentor-data:/data
+    restart: unless-stopped
+
+volumes:
+  mentor-data:

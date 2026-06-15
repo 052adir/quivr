@@ -19,10 +19,33 @@ async function api(path, { method = "GET", body } = {}) {
     logout();
     throw new Error("נדרשת התחברות מחדש");
   }
+  if (res.status === 402) {
+    showUpgrade();
+    throw new Error("subscription_required");
+  }
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.detail || "שגיאה");
+  if (!res.ok) {
+    const detail = typeof data.detail === "string" ? data.detail : "שגיאה";
+    throw new Error(detail);
+  }
   return data;
 }
+
+function showUpgrade() {
+  document.getElementById("upgrade").classList.remove("hidden");
+}
+
+async function startCheckout() {
+  const note = document.getElementById("upgrade-note");
+  try {
+    const { url } = await api("/billing/checkout", { method: "POST" });
+    location.href = url;
+  } catch (e) {
+    if (note) note.textContent = "החיוב עדיין לא מחובר (מצב ניסיון). פנה אלינו להפעלה.";
+    else toast("החיוב עדיין לא מחובר");
+  }
+}
+window.startCheckout = startCheckout;
 
 function toast(msg) {
   const t = document.getElementById("toast");
@@ -71,7 +94,10 @@ function logout() {
 async function showApp() {
   $("auth").classList.add("hidden");
   $("app").style.display = "block";
-  await Promise.all([loadDashboard(), loadConnections(), loadMe()]);
+  // loadMe drives the trial banner / upgrade wall; the rest may 402 gracefully.
+  await loadMe();
+  loadDashboard().catch(() => {});
+  loadConnections().catch(() => {});
 }
 
 // --------------------------------------------------------------------------
@@ -306,6 +332,24 @@ async function loadMe() {
   const me = await api("/me");
   $("set-account").value = me.account_size;
   $("set-telegram").value = me.telegram_chat_id || "";
+  renderTrialBanner(me.access);
+}
+
+function renderTrialBanner(a) {
+  const banner = $("trial-banner");
+  if (!a) return;
+  if (a.status === "trialing") {
+    banner.classList.remove("hidden", "expired");
+    banner.innerHTML =
+      `🎁 ניסיון חינם — נותרו <b>${a.trial_days_left}</b> ימים` +
+      `<div class="spacer"></div>` +
+      `<button class="btn small" onclick="startCheckout()">שדרג ל-₪79/חודש</button>`;
+  } else if (a.status === "active") {
+    banner.classList.add("hidden");
+  } else {
+    banner.classList.add("hidden");
+    showUpgrade();
+  }
 }
 
 async function loadConnections() {
@@ -377,6 +421,8 @@ $("set-save").addEventListener("click", async () => {
 $("auth-submit").addEventListener("click", handleAuth);
 $("auth-password").addEventListener("keydown", (e) => e.key === "Enter" && handleAuth());
 $("logout").addEventListener("click", logout);
+$("upgrade-btn").addEventListener("click", startCheckout);
+$("upgrade-logout").addEventListener("click", logout);
 
 if (token) {
   showApp().catch(() => logout());

@@ -34,6 +34,13 @@ class User(Base):
     # Optional Telegram chat id for real-time push alerts.
     telegram_chat_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
+    # Subscription / trial state.
+    subscription_status: Mapped[str] = mapped_column(String(20), default="trialing")
+    plan: Mapped[str] = mapped_column(String(20), default="pro")
+    trial_ends_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    stripe_customer_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    stripe_subscription_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 
     connections: Mapped[list["Connection"]] = relationship(
@@ -51,9 +58,11 @@ class Connection(Base):
     exchange: Mapped[str] = mapped_column(String(32), default="binance")
     label: Mapped[str] = mapped_column(String(64), default="Binance")
 
-    # api_key == "DEMO" enables the synthetic feed (no real network calls).
-    api_key: Mapped[str] = mapped_column(String(255))
-    api_secret: Mapped[str] = mapped_column(String(255), default="")
+    # is_demo enables the synthetic feed (no real network calls).
+    is_demo: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Exchange credentials, encrypted at rest (see app/crypto.py).
+    api_key_enc: Mapped[str] = mapped_column(Text, default="")
+    api_secret_enc: Mapped[str] = mapped_column(Text, default="")
     # Which symbols to pull executed trades for.
     symbols: Mapped[str] = mapped_column(String(255), default="BTCUSDT,ETHUSDT,SOLUSDT")
 

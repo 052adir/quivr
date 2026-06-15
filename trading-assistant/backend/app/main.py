@@ -1,21 +1,27 @@
 """Mentor Trade — FastAPI application.
 
-Serves the JSON API and the static dashboard, and runs a background loop that
-keeps every user's journal and alerts fresh.
+Serves the JSON API and the static dashboard/landing, runs a background sync
+loop, and enforces the subscription paywall. Production concerns (logging,
+security headers, CORS, health checks, rate limiting, encrypted credentials,
+Stripe billing) are wired in here.
 """
 
+import logging
 import threading
 import time
+import uuid
+from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, Header, HTTPException
-from fastapi.responses import FileResponse
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
-from . import education, security, sync_service
+from . import __version__, access, billing, crypto, education, ratelimit, security, sync_service
 from .analysis import summarize
 from .binance_client import BinanceClient, BinanceError
 from .config import settings
@@ -31,15 +37,80 @@ from .schemas import (
     TokenOut,
 )
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s %(message)s",
+)
+log = logging.getLogger("mentor")
+
 ROOT_DIR = Path(__file__).resolve().parent.parent.parent
 FRONTEND_DIR = ROOT_DIR / "frontend"
 LANDING_DIR = ROOT_DIR / "landing"
 
-app = FastAPI(title="Mentor Trade", version="0.1.0")
+def _sync_loop():
+    while True:
+        time.sleep(settings.sync_interval_seconds)
+        db = SessionLocal()
+        try:
+            sync_service.sync_all_users(db)
+        except Exception:
+            log.exception("[sync-loop] error")
+        finally:
+            db.close()
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    init_db()
+    threading.Thread(target=_sync_loop, daemon=True).start()
+    log.info(
+        "Mentor Trade %s ready | AI:%s | billing:%s | env:%s",
+        __version__,
+        "on" if settings.ai_enabled else "off",
+        "on" if settings.billing_enabled else "trial-only",
+        settings.environment,
+    )
+    yield
+
+
+app = FastAPI(title="Mentor Trade", version=__version__, lifespan=lifespan)
+
+if settings.cors_origins:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.cors_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 
 # --------------------------------------------------------------------------- #
-# Auth dependency
+# Middleware: request logging + security headers
+# --------------------------------------------------------------------------- #
+@app.middleware("http")
+async def observability(request: Request, call_next):
+    rid = uuid.uuid4().hex[:8]
+    start = time.monotonic()
+    try:
+        response = await call_next(request)
+    except Exception:
+        log.exception("[%s] unhandled error on %s %s", rid, request.method, request.url.path)
+        return JSONResponse(status_code=500, content={"detail": "internal error"})
+    elapsed = (time.monotonic() - start) * 1000
+    log.info("[%s] %s %s -> %s (%.0fms)", rid, request.method, request.url.path,
+             response.status_code, elapsed)
+    response.headers["X-Request-ID"] = rid
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "SAMEORIGIN"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    if settings.is_production:
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    return response
+
+
+# --------------------------------------------------------------------------- #
+# Auth + access dependencies
 # --------------------------------------------------------------------------- #
 def current_user(
     authorization: str = Header(default=""), db: Session = Depends(get_db)
@@ -53,11 +124,41 @@ def current_user(
     return user
 
 
+def require_access(user: User = Depends(current_user)) -> User:
+    """Gate premium features behind an active trial or subscription."""
+    st = access.state(user)
+    if not st["active"]:
+        raise HTTPException(
+            402, detail={"error": "subscription_required", "status": st["status"]}
+        )
+    return user
+
+
+# --------------------------------------------------------------------------- #
+# Ops
+# --------------------------------------------------------------------------- #
+@app.get("/healthz")
+def healthz(db: Session = Depends(get_db)):
+    db.execute(text("SELECT 1"))
+    return {"status": "ok", "version": __version__}
+
+
+@app.get("/version")
+def version():
+    return {
+        "version": __version__,
+        "ai_enabled": settings.ai_enabled,
+        "billing_enabled": settings.billing_enabled,
+        "environment": settings.environment,
+    }
+
+
 # --------------------------------------------------------------------------- #
 # Auth + settings
 # --------------------------------------------------------------------------- #
 @app.post("/api/auth/register", response_model=TokenOut)
-def register(body: RegisterIn, db: Session = Depends(get_db)):
+def register(body: RegisterIn, request: Request, db: Session = Depends(get_db)):
+    ratelimit.limit(request, key="register", max_calls=5, window_secs=300)
     if db.scalar(select(User).where(User.email == body.email)):
         raise HTTPException(400, "email already registered")
     user = User(
@@ -65,13 +166,16 @@ def register(body: RegisterIn, db: Session = Depends(get_db)):
         password_hash=security.hash_password(body.password),
         token=security.new_token(),
     )
+    access.start_trial(user)
     db.add(user)
     db.commit()
+    log.info("new user registered: %s", user.email)
     return TokenOut(token=user.token, email=user.email)
 
 
 @app.post("/api/auth/login", response_model=TokenOut)
-def login(body: LoginIn, db: Session = Depends(get_db)):
+def login(body: LoginIn, request: Request, db: Session = Depends(get_db)):
+    ratelimit.limit(request, key="login", max_calls=10, window_secs=300)
     user = db.scalar(select(User).where(User.email == body.email))
     if not user or not security.verify_password(body.password, user.password_hash):
         raise HTTPException(401, "bad credentials")
@@ -85,6 +189,7 @@ def me(user: User = Depends(current_user)):
         "account_size": user.account_size,
         "telegram_chat_id": user.telegram_chat_id,
         "ai_enabled": settings.ai_enabled,
+        "access": access.state(user),
     }
 
 
@@ -101,6 +206,44 @@ def update_settings(
 
 
 # --------------------------------------------------------------------------- #
+# Billing
+# --------------------------------------------------------------------------- #
+@app.get("/api/billing/status")
+def billing_status(user: User = Depends(current_user)):
+    return {
+        "access": access.state(user),
+        "billing_enabled": settings.billing_enabled,
+        "price_label": "₪79 / חודש",
+    }
+
+
+@app.post("/api/billing/checkout")
+def billing_checkout(user: User = Depends(current_user)):
+    if not settings.billing_enabled:
+        raise HTTPException(503, "billing not configured")
+    try:
+        url = billing.create_checkout_session(user)
+    except Exception as exc:
+        log.exception("checkout failed")
+        raise HTTPException(502, f"checkout failed: {exc}")
+    return {"url": url}
+
+
+@app.post("/api/billing/webhook")
+async def billing_webhook(request: Request, db: Session = Depends(get_db)):
+    if not settings.billing_enabled:
+        raise HTTPException(503, "billing not configured")
+    payload = await request.body()
+    sig = request.headers.get("stripe-signature", "")
+    try:
+        event = billing.verify_and_parse_webhook(payload, sig)
+    except Exception as exc:
+        raise HTTPException(400, f"invalid webhook: {exc}")
+    billing.apply_webhook_event(db, event)
+    return {"received": True}
+
+
+# --------------------------------------------------------------------------- #
 # Connections
 # --------------------------------------------------------------------------- #
 @app.get("/api/connections")
@@ -112,7 +255,7 @@ def list_connections(user: User = Depends(current_user), db: Session = Depends(g
             "exchange": c.exchange,
             "label": c.label,
             "symbols": c.symbols,
-            "is_demo": c.api_key.strip().upper() == "DEMO",
+            "is_demo": c.is_demo,
             "last_synced_at": c.last_synced_at.isoformat() if c.last_synced_at else None,
         }
         for c in conns
@@ -121,11 +264,11 @@ def list_connections(user: User = Depends(current_user), db: Session = Depends(g
 
 @app.post("/api/connections")
 def add_connection(
-    body: ConnectionIn, user: User = Depends(current_user), db: Session = Depends(get_db)
+    body: ConnectionIn, user: User = Depends(require_access), db: Session = Depends(get_db)
 ):
     is_demo = body.api_key.strip().upper() == "DEMO"
-    # Verify a real (read-only) key before saving so the user gets instant feedback.
     if not is_demo:
+        # Verify a real (read-only) key before saving, for instant feedback.
         try:
             BinanceClient(body.api_key, body.api_secret).verify()
         except BinanceError as exc:
@@ -135,8 +278,9 @@ def add_connection(
         user_id=user.id,
         exchange=body.exchange,
         label="חשבון דמו" if is_demo else body.label,
-        api_key=body.api_key.strip(),
-        api_secret=body.api_secret.strip(),
+        is_demo=is_demo,
+        api_key_enc=crypto.encrypt("" if is_demo else body.api_key.strip()),
+        api_secret_enc=crypto.encrypt("" if is_demo else body.api_secret.strip()),
         symbols=body.symbols,
     )
     db.add(conn)
@@ -163,21 +307,20 @@ def delete_connection(
 
 
 @app.post("/api/sync")
-def sync_now(user: User = Depends(current_user), db: Session = Depends(get_db)):
+def sync_now(user: User = Depends(require_access), db: Session = Depends(get_db)):
     return sync_service.sync_user(db, user)
 
 
 # --------------------------------------------------------------------------- #
-# Dashboard / journal / alerts / review
+# Dashboard / journal / alerts / review (paywalled)
 # --------------------------------------------------------------------------- #
 @app.get("/api/dashboard")
-def dashboard(user: User = Depends(current_user), db: Session = Depends(get_db)):
+def dashboard(user: User = Depends(require_access), db: Session = Depends(get_db)):
     trips = db.scalars(
         select(RoundTrip).where(RoundTrip.user_id == user.id).order_by(RoundTrip.exit_time)
     ).all()
     stats = summarize(trips)
 
-    # Cumulative P&L curve for the chart.
     cum = 0.0
     equity = []
     for t in trips:
@@ -203,7 +346,7 @@ def dashboard(user: User = Depends(current_user), db: Session = Depends(get_db))
 
 
 @app.get("/api/trades")
-def trades(user: User = Depends(current_user), db: Session = Depends(get_db)):
+def trades(user: User = Depends(require_access), db: Session = Depends(get_db)):
     trips = db.scalars(
         select(RoundTrip)
         .where(RoundTrip.user_id == user.id)
@@ -227,7 +370,7 @@ def trades(user: User = Depends(current_user), db: Session = Depends(get_db)):
 
 
 @app.get("/api/alerts")
-def alerts(user: User = Depends(current_user), db: Session = Depends(get_db)):
+def alerts(user: User = Depends(require_access), db: Session = Depends(get_db)):
     rows = db.scalars(
         select(Alert).where(Alert.user_id == user.id).order_by(Alert.created_at.desc())
     ).all()
@@ -245,7 +388,7 @@ def mark_read(user: User = Depends(current_user), db: Session = Depends(get_db))
 
 
 @app.get("/api/review/weekly")
-def weekly_review(user: User = Depends(current_user), db: Session = Depends(get_db)):
+def weekly_review(user: User = Depends(require_access), db: Session = Depends(get_db)):
     cutoff = (datetime.now(timezone.utc) - timedelta(days=7)).replace(tzinfo=None)
     trips = db.scalars(
         select(RoundTrip).where(
@@ -261,7 +404,6 @@ def weekly_review(user: User = Depends(current_user), db: Session = Depends(get_
             Alert.created_at >= cutoff,
         )
     ).all()
-    # Most frequent weakness this week.
     counts: dict[str, int] = {}
     for a in recent_alerts:
         counts[a.type] = counts.get(a.type, 0) + 1
@@ -292,7 +434,7 @@ def chat_history(user: User = Depends(current_user), db: Session = Depends(get_d
 
 @app.post("/api/chat")
 def chat(
-    body: ChatIn, user: User = Depends(current_user), db: Session = Depends(get_db)
+    body: ChatIn, user: User = Depends(require_access), db: Session = Depends(get_db)
 ):
     reply = education.answer(db, user, body.message.strip())
     return {"reply": reply}
@@ -302,12 +444,13 @@ def chat(
 # Marketing — public lead capture + affiliate tracking
 # --------------------------------------------------------------------------- #
 @app.post("/api/leads")
-def capture_lead(body: LeadIn, db: Session = Depends(get_db)):
+def capture_lead(body: LeadIn, request: Request, db: Session = Depends(get_db)):
+    ratelimit.limit(request, key="leads", max_calls=20, window_secs=300)
     if not body.email and not body.phone:
         raise HTTPException(400, "email or phone required")
     lead = Lead(
-        email=(body.email or "").strip() or None,
-        phone=(body.phone or "").strip() or None,
+        email=(body.email or "").strip()[:255] or None,
+        phone=(body.phone or "").strip()[:40] or None,
         source=(body.source or "landing").strip()[:40],
         ref_code=(body.ref_code or "").strip()[:40] or None,
     )
@@ -318,7 +461,6 @@ def capture_lead(body: LeadIn, db: Session = Depends(get_db)):
 
 @app.get("/api/leads")
 def list_leads(user: User = Depends(current_user), db: Session = Depends(get_db)):
-    """Simple admin view of captured leads (any logged-in user, for the MVP)."""
     rows = db.scalars(select(Lead).order_by(Lead.created_at.desc())).all()
     return [
         {
@@ -385,7 +527,6 @@ if FRONTEND_DIR.exists():
 
 
 if LANDING_DIR.exists():
-    # Root is the public, conversion-focused marketing page; the product lives at /app.
     @app.get("/")
     def landing():
         return FileResponse(LANDING_DIR / "index.html")
@@ -395,27 +536,3 @@ elif FRONTEND_DIR.exists():
         return FileResponse(FRONTEND_DIR / "index.html")
 
 
-# --------------------------------------------------------------------------- #
-# Background sync loop
-# --------------------------------------------------------------------------- #
-def _sync_loop():
-    while True:
-        time.sleep(settings.sync_interval_seconds)
-        db = SessionLocal()
-        try:
-            sync_service.sync_all_users(db)
-        except Exception as exc:  # never let the loop die
-            print(f"[sync-loop] error: {exc}")
-        finally:
-            db.close()
-
-
-@app.on_event("startup")
-def on_startup():
-    init_db()
-    thread = threading.Thread(target=_sync_loop, daemon=True)
-    thread.start()
-    print(
-        f"[startup] Mentor Trade ready. AI tutor: "
-        f"{'on (' + settings.chat_model + ')' if settings.ai_enabled else 'off (fallback)'}"
-    )

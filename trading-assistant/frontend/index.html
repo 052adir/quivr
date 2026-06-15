@@ -45,6 +45,7 @@
     </div>
 
     <div class="content">
+      <div id="trial-banner" class="trial-banner hidden"></div>
       <!-- Dashboard -->
       <section class="view active" id="view-dashboard">
         <h2 class="view-title">לוח בקרה</h2>
@@ -152,6 +153,19 @@
           <button class="btn small" id="set-save">שמור הגדרות</button>
         </div>
       </section>
+    </div>
+  </div>
+
+  <!-- Upgrade wall (shown when trial expired / no subscription) -->
+  <div id="upgrade" class="overlay hidden">
+    <div class="overlay-card">
+      <div class="brand-logo">מנטור 📈</div>
+      <h3 id="upgrade-title">תקופת הניסיון הסתיימה</h3>
+      <p class="note">כדי להמשיך לקבל אימון, יומן אוטומטי והתראות בזמן אמת — שדרג למנוי.</p>
+      <div class="price" style="font-size:34px;font-weight:800;margin:10px 0">₪79<small style="font-size:16px;color:var(--muted)"> /חודש</small></div>
+      <button class="btn" id="upgrade-btn">שדרג עכשיו</button>
+      <button class="btn ghost" id="upgrade-logout" style="width:100%;margin-top:8px">התנתק</button>
+      <div class="note" id="upgrade-note" style="margin-top:10px"></div>
     </div>
   </div>
 

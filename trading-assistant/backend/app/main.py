@@ -6,19 +6,21 @@ security headers, CORS, health checks, rate limiting, encrypted credentials,
 Stripe billing) are wired in here.
 """
 
+import io
 import json
 import logging
 import secrets
 import threading
 import time
 import uuid
+import zipfile
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
@@ -61,6 +63,7 @@ log = logging.getLogger("mentor")
 ROOT_DIR = Path(__file__).resolve().parent.parent.parent
 FRONTEND_DIR = ROOT_DIR / "frontend"
 LANDING_DIR = ROOT_DIR / "landing"
+WATCHER_EXE = ROOT_DIR / "watcher" / "dist" / "MentorGuard.exe"
 
 def _sync_loop():
     while True:
@@ -209,6 +212,46 @@ def me(user: User = Depends(current_user)):
         "ai_enabled": settings.ai_enabled,
         "access": access.state(user),
     }
+
+
+@app.get("/api/download/watcher")
+def download_watcher(user: User = Depends(current_user)):
+    """Serve the desktop watcher as a ZIP, pre-linked to this user's account.
+
+    The user just extracts and double-clicks MentorGuard.exe — no setup. The
+    bundled .ini carries their token + webhook URL so live alerts flow straight
+    to their account, Telegram, and dashboard.
+    """
+    if not WATCHER_EXE.exists():
+        raise HTTPException(503, "שומר המסחר עדיין לא נבנה בשרת הזה")
+
+    ini = (
+        "[mentor]\n"
+        f"backend_url = {settings.app_base_url}/api/ea/event\n"
+        f"token = {user.token}\n"
+        "max_risk_pct = 2.0\n"
+        "grace_seconds = 60\n"
+        "revenge_minutes = 30\n"
+    )
+    readme = (
+        "מנטור — שומר המסחר\r\n"
+        "================\r\n"
+        "1. ודא ש-MetaTrader 5 פתוח ומחובר לחשבון.\r\n"
+        "2. לחץ פעמיים על MentorGuard.exe.\r\n"
+        "3. זהו. הוא ישמור עליך ויתריע על טעויות בזמן אמת.\r\n"
+        "(קריאה בלבד — לא סוחר. השאר את שני הקבצים יחד באותה תיקייה.)\r\n"
+    )
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+        z.write(WATCHER_EXE, "MentorGuard.exe")
+        z.writestr("mentor_watcher.ini", ini)
+        z.writestr("קרא_אותי.txt", readme)
+    buf.seek(0)
+    return Response(
+        content=buf.getvalue(),
+        media_type="application/zip",
+        headers={"Content-Disposition": "attachment; filename=MentorGuard.zip"},
+    )
 
 
 @app.post("/api/telegram/connect")

@@ -507,6 +507,33 @@ $("logout").addEventListener("click", logout);
 $("upgrade-btn").addEventListener("click", startCheckout);
 $("upgrade-logout").addEventListener("click", logout);
 $("tg-connect").addEventListener("click", connectTelegram);
+$("dl-watcher").addEventListener("click", downloadWatcher);
+
+async function downloadWatcher() {
+  const note = $("dl-watcher-note");
+  note.textContent = "מכין הורדה…";
+  try {
+    const res = await fetch("/api/download/watcher", {
+      headers: { Authorization: "Bearer " + token },
+    });
+    if (!res.ok) {
+      note.textContent = "ההורדה לא זמינה בשרת הזה כרגע.";
+      return;
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "MentorGuard.zip";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    note.textContent = "ירד! חלץ את ה-ZIP, ודא ש-MT5 פתוח, ולחץ פעמיים על MentorGuard.exe.";
+  } catch (e) {
+    note.textContent = "שגיאה בהורדה: " + e.message;
+  }
+}
 
 if (token) {
   showApp().catch(() => logout());

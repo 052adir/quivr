@@ -94,10 +94,25 @@ function logout() {
 async function showApp() {
   $("auth").classList.add("hidden");
   $("app").style.display = "block";
+  handleBillingReturn();
   // loadMe drives the trial banner / upgrade wall; the rest may 402 gracefully.
   await loadMe();
   loadDashboard().catch(() => {});
   loadConnections().catch(() => {});
+}
+
+function handleBillingReturn() {
+  const p = new URLSearchParams(location.search);
+  const b = p.get("billing");
+  if (!b) return;
+  history.replaceState({}, "", "/app");
+  document.getElementById("upgrade").classList.add("hidden");
+  if (b === "success") {
+    toast("התשלום התקבל! המנוי פעיל 🎉");
+    setTimeout(() => loadMe().catch(() => {}), 1500); // give the webhook a moment
+  } else if (b === "cancel") {
+    toast("התשלום בוטל");
+  }
 }
 
 // --------------------------------------------------------------------------
@@ -333,6 +348,39 @@ async function loadMe() {
   $("set-account").value = me.account_size;
   $("set-telegram").value = me.telegram_chat_id || "";
   renderTrialBanner(me.access);
+  renderTelegramStatus(me.telegram_linked);
+}
+
+function renderTelegramStatus(linked) {
+  const el = $("tg-status");
+  if (!el) return;
+  el.innerHTML = linked
+    ? '<span class="pill-demo">✓ מחובר — תקבל התראות בטלגרם</span>'
+    : '<span class="note">לא מחובר עדיין.</span>';
+  $("tg-connect").textContent = linked ? "חבר טלגרם אחר" : "חבר טלגרם";
+}
+
+async function connectTelegram() {
+  const out = $("tg-result");
+  out.innerHTML = "טוען…";
+  try {
+    const r = await api("/telegram/connect", { method: "POST" });
+    if (!r.bot_configured) {
+      out.innerHTML =
+        '<div class="note">בוט הטלגרם עדיין לא הופעל בצד השרת ' +
+        "(נדרש TELEGRAM_BOT_TOKEN). לאחר הפעלה — חזור לכאן.</div>";
+      return;
+    }
+    const linkBtn = r.deep_link
+      ? `<a class="btn small" href="${r.deep_link}" target="_blank">פתח בטלגרם וחבר בלחיצה</a>`
+      : "";
+    out.innerHTML =
+      `<div class="note">פתח את הבוט בטלגרם ושלח את ההודעה:</div>` +
+      `<div class="msg assistant" style="max-width:100%;margin:8px 0">/link ${r.code}</div>` +
+      linkBtn;
+  } catch (e) {
+    out.innerHTML = '<div class="error-msg">' + e.message + "</div>";
+  }
 }
 
 function renderTrialBanner(a) {
@@ -423,6 +471,7 @@ $("auth-password").addEventListener("keydown", (e) => e.key === "Enter" && handl
 $("logout").addEventListener("click", logout);
 $("upgrade-btn").addEventListener("click", startCheckout);
 $("upgrade-logout").addEventListener("click", logout);
+$("tg-connect").addEventListener("click", connectTelegram);
 
 if (token) {
   showApp().catch(() => logout());

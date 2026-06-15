@@ -19,3 +19,20 @@ def send_message(chat_id: str, text: str) -> bool:
         return resp.status_code == 200
     except httpx.HTTPError:
         return False
+
+
+def get_updates(offset: int | None, timeout: int = 25) -> list[dict]:
+    """Long-poll for new updates. Returns [] on any error."""
+    if not settings.telegram_bot_token:
+        return []
+    url = f"https://api.telegram.org/bot{settings.telegram_bot_token}/getUpdates"
+    params = {"timeout": timeout}
+    if offset is not None:
+        params["offset"] = offset
+    try:
+        resp = httpx.get(url, params=params, timeout=timeout + 10)
+        if resp.status_code != 200:
+            return []
+        return resp.json().get("result", [])
+    except httpx.HTTPError:
+        return []

@@ -141,13 +141,21 @@
         </div>
 
         <div class="panel">
+          <h3>התראות בטלגרם</h3>
+          <p class="note">חבר את הטלגרם שלך כדי לקבל התראות בזמן אמת — בלי לפתוח שום מסך.</p>
+          <div id="tg-status" style="margin:12px 0"></div>
+          <button class="btn small" id="tg-connect">חבר טלגרם</button>
+          <div id="tg-result" style="margin-top:14px"></div>
+        </div>
+
+        <div class="panel">
           <h3>הגדרות</h3>
           <div class="field">
             <label>גודל החשבון (USD) — לחישוב סיכון</label>
             <input id="set-account" type="number" value="1000" />
           </div>
           <div class="field">
-            <label>Telegram Chat ID (אופציונלי — להתראות בזמן אמת)</label>
+            <label>Telegram Chat ID (מתקדם — מתמלא אוטומטית בחיבור)</label>
             <input id="set-telegram" placeholder="למשל 123456789" />
           </div>
           <button class="btn small" id="set-save">שמור הגדרות</button>

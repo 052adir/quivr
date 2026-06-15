@@ -7,6 +7,7 @@ Stripe billing) are wired in here.
 """
 
 import logging
+import secrets
 import threading
 import time
 import uuid
@@ -21,7 +22,17 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
-from . import __version__, access, billing, crypto, education, ratelimit, security, sync_service
+from . import (
+    __version__,
+    access,
+    billing,
+    crypto,
+    education,
+    ratelimit,
+    security,
+    sync_service,
+    telegram_bot,
+)
 from .analysis import summarize
 from .binance_client import BinanceClient, BinanceError
 from .config import settings
@@ -63,6 +74,8 @@ def _sync_loop():
 async def lifespan(_app: FastAPI):
     init_db()
     threading.Thread(target=_sync_loop, daemon=True).start()
+    if settings.telegram_bot_token:
+        threading.Thread(target=telegram_bot.poll_loop, daemon=True).start()
     log.info(
         "Mentor Trade %s ready | AI:%s | billing:%s | env:%s",
         __version__,
@@ -188,8 +201,24 @@ def me(user: User = Depends(current_user)):
         "email": user.email,
         "account_size": user.account_size,
         "telegram_chat_id": user.telegram_chat_id,
+        "telegram_linked": user.telegram_chat_id is not None,
         "ai_enabled": settings.ai_enabled,
         "access": access.state(user),
+    }
+
+
+@app.post("/api/telegram/connect")
+def telegram_connect(user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """Issue a one-time link code (+ deep link) to connect the user's Telegram."""
+    if not user.telegram_link_code:
+        user.telegram_link_code = secrets.token_hex(4)
+        db.commit()
+    bot = settings.telegram_bot_username
+    return {
+        "code": user.telegram_link_code,
+        "deep_link": f"https://t.me/{bot}?start=link-{user.telegram_link_code}" if bot else None,
+        "bot_configured": bool(settings.telegram_bot_token),
+        "linked": user.telegram_chat_id is not None,
     }
 
 

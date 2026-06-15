@@ -30,6 +30,8 @@ class Settings:
     chat_model: str = os.getenv("MENTOR_CHAT_MODEL", "claude-sonnet-4-6").strip()
 
     telegram_bot_token: str = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
+    # Bot @username (without @) — used to build one-tap deep links.
+    telegram_bot_username: str = os.getenv("TELEGRAM_BOT_USERNAME", "").strip().lstrip("@")
 
     sync_interval_seconds: int = int(os.getenv("SYNC_INTERVAL_SECONDS", "60"))
 

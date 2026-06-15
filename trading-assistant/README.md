@@ -97,10 +97,23 @@ export MENTOR_SECRET_KEY=$(python3 -c "import secrets;print(secrets.token_hex(32
 docker compose up --build      # http://localhost:8000
 ```
 
-### חיבור Stripe (להפעלת גבייה אמיתית)
+### חיבור Stripe (גבייה אמיתית, מקצה לקצה)
 
-הגדר ב-`.env`: `STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID` (מנוי ₪79/חודש), `STRIPE_WEBHOOK_SECRET`.
-הפנה את ה-Webhook של Stripe ל-`/api/billing/webhook`. ללא המפתחות המערכת רצה במצב ניסיון בלבד.
+1. הגדר ב-`.env`: `STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID` (מנוי חוזר ₪79/חודש), `STRIPE_WEBHOOK_SECRET`.
+2. המשתמש לוחץ "שדרג" → `POST /api/billing/checkout` יוצר Checkout Session ומפנה ל-Stripe.
+3. אחרי תשלום חוזרים ל-`/app?billing=success` (טוסט הצלחה + רענון סטטוס).
+4. Stripe שולח Webhook ל-`/api/billing/webhook` → המנוי מסומן `active` (ובחיובים שנכשלו `past_due`, בביטול `canceled`).
+
+לבדיקה מקומית: `stripe listen --forward-to localhost:8000/api/billing/webhook`.
+ללא מפתחות — המערכת רצה ב"מצב ניסיון בלבד" וכל מסך החיוב מתנהג בהתאם.
+
+### בוט טלגרם (לכידת לידים + התראות אוטומטיות)
+
+1. צור בוט עם **@BotFather**, והגדר ב-`.env`: `TELEGRAM_BOT_TOKEN` ו-`TELEGRAM_BOT_USERNAME`.
+2. השרת מפעיל אוטומטית worker שמאזין לבוט (long-polling) כשהטוקן מוגדר.
+3. **לכידת לידים:** כל מי שפותח את הבוט (`/start`) נשמר כליד, כולל קוד אפיליאייט מה-deep-link (`?start=REF`).
+4. **חיבור חשבון:** במסך "חיבור והגדרות" → "חבר טלגרם" → המשתמש שולח לבוט `/link CODE` (או לוחץ על ה-deep-link), והצ'אט שלו נקשר לחשבון.
+5. מאותו רגע כל התראה (revenge trade, בלי stop וכו') נדחפת אליו אוטומטית בטלגרם.
 
 ## הערות אבטחה
 

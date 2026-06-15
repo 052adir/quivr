@@ -40,6 +40,8 @@ class User(Base):
     trial_ends_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     stripe_customer_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     stripe_subscription_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # One-time code used to link a Telegram chat to this account.
+    telegram_link_code: Mapped[str | None] = mapped_column(String(16), nullable=True, index=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 

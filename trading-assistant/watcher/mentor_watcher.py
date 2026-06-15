@@ -90,11 +90,15 @@ def risk_money(symbol: str, open_price: float, sl: float, vol: float) -> float:
     return ticks * info.trade_tick_value * vol
 
 
+def _ts() -> str:
+    return datetime.now().strftime("%H:%M:%S")
+
+
 def main() -> None:
-    print("=" * 56)
-    print("  מנטור — שומר המסחר שלך פעיל. (קריאה בלבד, לא סוחר.)")
-    print("  השאר את החלון פתוח בזמן המסחר. לסגירה: סגור את החלון.")
-    print("=" * 56)
+    print("=" * 60)
+    print("  מנטור — שומר המסחר שלך")
+    print("  קריאה בלבד, לא סוחר. השאר את החלון פתוח בזמן המסחר.")
+    print("=" * 60)
 
     if mt5 is None:
         print("MetaTrader5 לא זמין במכונה הזו.")
@@ -105,17 +109,31 @@ def main() -> None:
     max_risk = float(cfg["max_risk_pct"])
     grace = int(cfg["grace_seconds"])
     revenge_min = int(cfg["revenge_minutes"])
+    linked = bool(cfg["backend_url"].strip() and cfg["token"].strip())
+    print(f"מחובר לחשבון Mentor: {'כן ✓' if linked else 'לא (התראות מקומיות בלבד)'}")
 
     warned_nostop: set = set()
     warned_oversized: set = set()
     seen_deals: set = set()
     last_loss_close = None
+    connected = False
 
     while True:
         if not mt5.initialize():
-            print("ממתין ל-MT5... ודא שהטרמינל פתוח ומחובר.")
+            print(f"[{_ts()}] ⏳ ממתין ל-MT5... ודא שהטרמינל פתוח ומחובר לחשבון. "
+                  f"(שגיאה: {mt5.last_error()})")
+            connected = False
             time.sleep(POLL_SECONDS)
             continue
+
+        if not connected:
+            ai = mt5.account_info()
+            if ai:
+                print("-" * 60)
+                print(f"✅ מחובר ל-MT5 | חשבון {ai.login} | {ai.server} | "
+                      f"יתרה {ai.balance:,.2f} {ai.currency}")
+                print("-" * 60)
+            connected = True
 
         # --- revenge: scan recent closing deals for losses + new opens ---
         deals = mt5.history_deals_get(datetime.now() - timedelta(hours=12), datetime.now())
@@ -134,8 +152,17 @@ def main() -> None:
                         toast("🛑 מסחר נקמה", msg)
                         post_backend(cfg, "revenge_trade", d.symbol, d.position_id, msg)
 
-        # --- open positions: no-stop + oversized ---
+        # --- open positions: heartbeat + no-stop + oversized ---
         positions = mt5.positions_get() or []
+        if positions:
+            summary = ", ".join(
+                f"{p.symbol}({'סטופ✓' if p.sl else 'אין סטופ✗'})" for p in positions
+            )
+            print(f"[{_ts()}] סורק {len(positions)} פוזיציות: {summary}")
+        else:
+            print(f"[{_ts()}] סורק... אין פוזיציות פתוחות כרגע. "
+                  f"פתח עסקה (בלי סטופ) כדי לראות אותי עובד.")
+
         for p in positions:
             grace_passed = (datetime.now().timestamp() - p.time) >= grace
             if p.sl == 0.0 and grace_passed and p.ticket not in warned_nostop:
@@ -145,7 +172,8 @@ def main() -> None:
                 post_backend(cfg, "no_stop_loss", p.symbol, p.ticket, msg)
                 warned_nostop.add(p.ticket)
             elif p.sl != 0.0 and p.ticket not in warned_oversized:
-                bal = mt5.account_info().balance if mt5.account_info() else 0
+                ai = mt5.account_info()
+                bal = ai.balance if ai else 0
                 risk = risk_money(p.symbol, p.price_open, p.sl, p.volume)
                 if bal > 0 and risk > bal * max_risk / 100:
                     msg = (f"הסיכון ב-{p.symbol} הוא כ-${risk:,.0f} — מעל {max_risk:.0f}% "

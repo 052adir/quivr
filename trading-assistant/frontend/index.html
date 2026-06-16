@@ -188,13 +188,18 @@
         </div>
 
         <div class="panel">
-          <h3>שומר מסחר חי (Windows) 🛡️</h3>
+          <h3>הבוט ל-MetaTrader 5 (מחשב) 🛡️</h3>
           <p class="note">
-            תוכנה קטנה שמתחברת ל-MT5 הפתוח שלך ומתריעה <b>בזמן אמת</b> על טעויות
-            (בלי stop-loss, סיכון גבוה, מסחר נקמה). <b>קובץ אחד — בלי חילוץ:</b>
-            מורידים, לוחצים פעמיים, נפתח חלון. קריאה בלבד — לא סוחר.
+            בוט שמותקן בתוך MT5 ומציג פאנל חי על הגרף + אזהרות אדומות מהבהבות
+            בזמן אמת (בלי stop-loss, סיכון גבוה, מסחר נקמה). קריאה בלבד — לא סוחר.
           </p>
-          <button class="btn small" id="dl-watcher">הורד את שומר המסחר (קובץ אחד)</button>
+          <ol class="note" style="line-height:2; margin: 8px 0; padding-inline-start: 18px">
+            <li>הורד את הבוט (כפתור למטה).</li>
+            <li>ב-MT5: <b>קובץ → פתח תיקיית נתונים</b> → היכנס ל-<code>MQL5\Experts</code> והעתק לשם את הקובץ.</li>
+            <li>ב-MT5, ב-Navigator (Ctrl+N) → גרור את <b>MentorGuard</b> על הגרף → אישור.</li>
+            <li>הפאנל יופיע בפינת הגרף. לקבלת התראות גם לטלגרם — חבר טלגרם למטה.</li>
+          </ol>
+          <button class="btn small" id="dl-watcher">הורד את הבוט (MentorGuard.ex5)</button>
           <div class="note" id="dl-watcher-note" style="margin-top:8px"></div>
         </div>
 

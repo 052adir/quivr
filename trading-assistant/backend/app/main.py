@@ -65,6 +65,7 @@ ROOT_DIR = Path(__file__).resolve().parent.parent.parent
 FRONTEND_DIR = ROOT_DIR / "frontend"
 LANDING_DIR = ROOT_DIR / "landing"
 WATCHER_EXE = ROOT_DIR / "watcher" / "dist" / "MentorGuard.exe"
+EA_FILE = ROOT_DIR / "mt5-ea" / "MentorGuard.ex5"  # the free in-terminal bot
 
 def _sync_loop():
     while True:
@@ -232,6 +233,27 @@ def download_watcher(
     return FileResponse(
         WATCHER_EXE,
         filename="MentorGuard.exe",
+        media_type="application/octet-stream",
+    )
+
+
+@app.get("/api/download/ea")
+def download_ea(
+    token: str = "", authorization: str = Header(default=""), db: Session = Depends(get_db)
+):
+    """Serve the free in-terminal bot (MentorGuard.ex5) for MT5 desktop.
+
+    A .ex5 is an MT5 file (not a Windows .exe), so it doesn't trigger
+    SmartScreen. The trader drops it into MT5's Experts folder and attaches it.
+    """
+    tok = (token or authorization.removeprefix("Bearer ")).strip()
+    if not db.scalar(select(User).where(User.token == tok)):
+        raise HTTPException(401, "invalid token")
+    if not EA_FILE.exists():
+        raise HTTPException(503, "הבוט עדיין לא נבנה בשרת הזה")
+    return FileResponse(
+        EA_FILE,
+        filename="MentorGuard.ex5",
         media_type="application/octet-stream",
     )
 

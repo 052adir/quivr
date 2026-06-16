@@ -513,7 +513,7 @@ async function downloadWatcher() {
   const note = $("dl-watcher-note");
   note.textContent = "מכין הורדה…";
   try {
-    const res = await fetch("/api/download/watcher", {
+    const res = await fetch("/api/download/ea", {
       headers: { Authorization: "Bearer " + token },
     });
     if (!res.ok) {
@@ -524,12 +524,12 @@ async function downloadWatcher() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "MentorGuard.exe";
+    a.download = "MentorGuard.ex5";
     document.body.appendChild(a);
     a.click();
     a.remove();
     URL.revokeObjectURL(url);
-    note.textContent = "ירד! ודא ש-MT5 פתוח, ולחץ פעמיים על MentorGuard.exe — ייפתח חלון.";
+    note.textContent = "ירד! העתק אותו ל-MQL5\\Experts ב-MT5, וגרור אותו על הגרף (ראה השלבים למעלה).";
   } catch (e) {
     note.textContent = "שגיאה בהורדה: " + e.message;
   }

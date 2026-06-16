@@ -1,195 +1,236 @@
 //+------------------------------------------------------------------+
-//|  MentorGuard.mq5  —  Mentor Trade live mistake coach              |
+//|  MentorGuard.mq5  —  Mentor Trade live coach, INSIDE MetaTrader 5 |
 //|                                                                  |
-//|  A READ-ONLY Expert Advisor: it watches YOUR own trades and      |
-//|  warns you in real time about the habits that cost money —       |
-//|  trading without a stop-loss, risking too much, and revenge      |
-//|  trading. It NEVER opens, modifies, or closes any order.         |
-//|                                                                  |
-//|  Channels (each optional): terminal popup + sound, push to the   |
-//|  MetaTrader mobile app, and a webhook to the Mentor app (which    |
-//|  forwards to Telegram + your dashboard).                          |
+//|  Draws a live panel in the chart corner showing your account,    |
+//|  every open position and whether it has a stop-loss, your risk,  |
+//|  and live warnings (no stop-loss / oversized / revenge trade).   |
+//|  Also pops MT5 alerts + mobile push. READ-ONLY — never trades.   |
 //+------------------------------------------------------------------+
 #property copyright "Mentor Trade"
-#property version   "1.00"
+#property version   "2.00"
 #property strict
 
-input string InpBackendUrl     = "";     // Mentor webhook URL (optional) e.g. http://localhost:8000/api/ea/event
-input string InpToken          = "";     // Your Mentor account token (from the app, optional)
 input double InpMaxRiskPct     = 2.0;    // "Oversized" threshold: max risk per trade as % of balance
-input int    InpGraceSeconds   = 60;     // Grace period to set a stop before we warn
+input int    InpGraceSeconds   = 60;     // Grace period to set a stop before warning
 input int    InpRevengeMinutes = 30;     // "Revenge trade" window after a losing close
-input bool   InpAlertNoStop    = true;   // Warn when a position has no stop-loss
-input bool   InpAlertOversized = true;   // Warn when risk exceeds InpMaxRiskPct
-input bool   InpAlertRevenge   = true;   // Warn on a new trade right after a loss
-input bool   InpPopup          = true;   // Terminal popup + sound
-input bool   InpMobile         = true;   // Push to the MetaTrader mobile app (set MetaQuotes ID in Options)
+input bool   InpPopup          = true;   // MT5 popup + sound on a mistake
+input bool   InpMobile         = true;   // Push to the MetaTrader mobile app
+input color  InpAccent         = clrSpringGreen;
 
-ulong    g_warned_nostop[];      // tickets already warned: no stop
-ulong    g_warned_oversized[];   // tickets already warned: oversized
-datetime g_last_loss_close = 0;  // time of the last losing close (for revenge detection)
+string   PFX = "MG_";          // chart-object name prefix
+ulong    g_warned_nostop[];
+ulong    g_warned_oversized[];
+datetime g_last_loss_close = 0;
+string   g_last_warning = "";
 
 //+------------------------------------------------------------------+
 int OnInit()
 {
-   EventSetTimer(3);  // re-scan open positions every 3 seconds
-   Print("MentorGuard active — read-only coach. It will not trade.");
-   if(StringLen(InpBackendUrl) > 0)
-      Print("Webhook on. If alerts don't reach the app, add the URL under "
-            "Tools->Options->Expert Advisors->Allow WebRequest for listed URL.");
+   EventSetTimer(2);
+   DrawPanel();
    return(INIT_SUCCEEDED);
 }
 
-void OnDeinit(const int reason) { EventKillTimer(); }
+void OnDeinit(const int reason)
+{
+   EventKillTimer();
+   ObjectsDeleteAll(0, PFX);
+   ChartRedraw();
+}
+
+void OnTick()  { DrawPanel(); }
+void OnTimer() { CheckMistakes(); DrawPanel(); }
 
 //+------------------------------------------------------------------+
-//| Re-scan open positions: no-stop and oversized checks             |
+//| The on-chart panel (upper-right corner)                          |
 //+------------------------------------------------------------------+
-void OnTimer()
+void DrawPanel()
+{
+   string lines[];
+   color  colors[];
+   int    n = 0;
+
+   double bal = AccountInfoDouble(ACCOUNT_BALANCE);
+   long   login = AccountInfoInteger(ACCOUNT_LOGIN);
+   string cur = AccountInfoString(ACCOUNT_CURRENCY);
+
+   AddLine(lines, colors, n, "מנטור — שומר המסחר", InpAccent);
+   AddLine(lines, colors, n, StringFormat("חשבון %I64d  |  יתרה %.0f %s", login, bal, cur), clrWhite);
+   AddLine(lines, colors, n, "————————————————", clrGray);
+
+   int total = PositionsTotal();
+   int nostop = 0;
+   AddLine(lines, colors, n, StringFormat("פוזיציות פתוחות: %d", total), clrWhite);
+
+   for(int i = 0; i < total && i < 8; i++)
+   {
+      ulong ticket = PositionGetTicket(i);
+      if(ticket == 0 || !PositionSelectByTicket(ticket)) continue;
+      string sym = PositionGetString(POSITION_SYMBOL);
+      double sl  = PositionGetDouble(POSITION_SL);
+      double vol = PositionGetDouble(POSITION_VOLUME);
+      double op  = PositionGetDouble(POSITION_PRICE_OPEN);
+      if(sl == 0.0)
+      {
+         nostop++;
+         AddLine(lines, colors, n, StringFormat("✗ %s  %.2f לוט  —  אין סטופ!", sym, vol), clrTomato);
+      }
+      else
+      {
+         double risk = RiskMoney(sym, op, sl, vol);
+         double pct  = (bal > 0) ? risk / bal * 100.0 : 0;
+         color c = (pct > InpMaxRiskPct) ? clrOrange : clrLimeGreen;
+         AddLine(lines, colors, n, StringFormat("✓ %s  %.2f לוט  —  סיכון %.1f%%", sym, vol, pct), c);
+      }
+   }
+
+   AddLine(lines, colors, n, "————————————————", clrGray);
+   if(nostop > 0)
+      AddLine(lines, colors, n, StringFormat("⚠️ %d עסקאות בלי stop-loss — שים סטופ!", nostop), clrTomato);
+   else if(total == 0)
+      AddLine(lines, colors, n, "אין עסקאות פתוחות — שומר עליך.", clrSilver);
+   else
+      AddLine(lines, colors, n, "✅ הכל תקין — לכל העסקאות יש סטופ.", clrLimeGreen);
+
+   if(g_last_warning != "")
+      AddLine(lines, colors, n, "📣 " + g_last_warning, clrOrange);
+
+   RenderPanel(lines, colors, n);
+}
+
+void AddLine(string &lines[], color &colors[], int &n, string text, color c)
+{
+   ArrayResize(lines, n + 1);
+   ArrayResize(colors, n + 1);
+   lines[n] = text;
+   colors[n] = c;
+   n++;
+}
+
+void RenderPanel(string &lines[], color &colors[], int n)
+{
+   int pad = 12, lineH = 20, width = 340;
+   int height = n * lineH + pad * 2;
+
+   // background
+   string bg = PFX + "bg";
+   if(ObjectFind(0, bg) < 0) ObjectCreate(0, bg, OBJ_RECTANGLE_LABEL, 0, 0, 0);
+   ObjectSetInteger(0, bg, OBJPROP_CORNER, CORNER_RIGHT_UPPER);
+   ObjectSetInteger(0, bg, OBJPROP_XDISTANCE, 10);
+   ObjectSetInteger(0, bg, OBJPROP_YDISTANCE, 12);
+   ObjectSetInteger(0, bg, OBJPROP_XSIZE, width);
+   ObjectSetInteger(0, bg, OBJPROP_YSIZE, height);
+   ObjectSetInteger(0, bg, OBJPROP_BGCOLOR, C'11,16,32');
+   ObjectSetInteger(0, bg, OBJPROP_BORDER_TYPE, BORDER_FLAT);
+   ObjectSetInteger(0, bg, OBJPROP_COLOR, C'40,49,83');
+   ObjectSetInteger(0, bg, OBJPROP_BACK, false);
+   ObjectSetInteger(0, bg, OBJPROP_SELECTABLE, false);
+
+   for(int i = 0; i < n; i++)
+   {
+      string name = PFX + "l" + (string)i;
+      if(ObjectFind(0, name) < 0) ObjectCreate(0, name, OBJ_LABEL, 0, 0, 0);
+      ObjectSetInteger(0, name, OBJPROP_CORNER, CORNER_RIGHT_UPPER);
+      ObjectSetInteger(0, name, OBJPROP_ANCHOR, ANCHOR_RIGHT_UPPER);
+      ObjectSetInteger(0, name, OBJPROP_XDISTANCE, 22);
+      ObjectSetInteger(0, name, OBJPROP_YDISTANCE, pad + 12 + i * lineH);
+      ObjectSetString(0, name, OBJPROP_TEXT, lines[i]);
+      ObjectSetString(0, name, OBJPROP_FONT, (i == 0) ? "Arial Bold" : "Arial");
+      ObjectSetInteger(0, name, OBJPROP_FONTSIZE, (i == 0) ? 11 : 9);
+      ObjectSetInteger(0, name, OBJPROP_COLOR, colors[i]);
+      ObjectSetInteger(0, name, OBJPROP_SELECTABLE, false);
+   }
+   // remove leftover lines from a previous (longer) render
+   for(int i = n; i < 40; i++)
+   {
+      string name = PFX + "l" + (string)i;
+      if(ObjectFind(0, name) >= 0) ObjectDelete(0, name);
+   }
+   ChartRedraw();
+}
+
+//+------------------------------------------------------------------+
+//| Mistake detection (alerts)                                       |
+//+------------------------------------------------------------------+
+void CheckMistakes()
 {
    int total = PositionsTotal();
    for(int i = 0; i < total; i++)
    {
       ulong ticket = PositionGetTicket(i);
-      if(ticket == 0 || !PositionSelectByTicket(ticket))
-         continue;
+      if(ticket == 0 || !PositionSelectByTicket(ticket)) continue;
+      string sym = PositionGetString(POSITION_SYMBOL);
+      double sl  = PositionGetDouble(POSITION_SL);
+      double vol = PositionGetDouble(POSITION_VOLUME);
+      double op  = PositionGetDouble(POSITION_PRICE_OPEN);
+      datetime ot = (datetime)PositionGetInteger(POSITION_TIME);
+      bool grace = (TimeCurrent() - ot) >= InpGraceSeconds;
 
-      string   sym       = PositionGetString(POSITION_SYMBOL);
-      double   sl        = PositionGetDouble(POSITION_SL);
-      double   vol       = PositionGetDouble(POSITION_VOLUME);
-      double   open      = PositionGetDouble(POSITION_PRICE_OPEN);
-      datetime open_time = (datetime)PositionGetInteger(POSITION_TIME);
-      bool     grace     = (TimeCurrent() - open_time) >= InpGraceSeconds;
-
-      // 1) No stop-loss
-      if(InpAlertNoStop && sl == 0.0 && grace && !Contains(g_warned_nostop, ticket))
+      if(sl == 0.0 && grace && !Contains(g_warned_nostop, ticket))
       {
-         string m = StringFormat("⚠️ פתחת %s בלי stop-loss. שים סטופ עכשיו — "
-                                 "הפסד אחד בלי סטופ מוחק כמה רווחים.", sym);
-         Fire("no_stop_loss", sym, ticket, m);
+         Fire("no_stop_loss", sym, ticket,
+              StringFormat("פתחת %s בלי stop-loss. שים סטופ עכשיו.", sym));
          Append(g_warned_nostop, ticket);
       }
-
-      // 2) Oversized risk (only computable when a stop is set)
-      if(InpAlertOversized && sl != 0.0 && !Contains(g_warned_oversized, ticket))
+      if(sl != 0.0 && !Contains(g_warned_oversized, ticket))
       {
-         double risk = RiskMoney(sym, open, sl, vol);
-         double bal  = AccountInfoDouble(ACCOUNT_BALANCE);
+         double bal = AccountInfoDouble(ACCOUNT_BALANCE);
+         double risk = RiskMoney(sym, op, sl, vol);
          if(bal > 0 && risk > bal * InpMaxRiskPct / 100.0)
          {
-            string m = StringFormat("⚠️ הסיכון בעסקה %s הוא כ-$%.0f — מעל %.0f%% מההון. "
-                                    "הקטן פוזיציה או קרב את הסטופ.", sym, risk, InpMaxRiskPct);
-            Fire("oversized", sym, ticket, m);
+            Fire("oversized", sym, ticket,
+                 StringFormat("סיכון גבוה ב-%s (~%.0f%% מההון). הקטן פוזיציה.",
+                              sym, risk / bal * 100.0));
             Append(g_warned_oversized, ticket);
          }
       }
    }
 }
 
-//+------------------------------------------------------------------+
-//| Trade events: revenge detection + losing-close tracking          |
-//+------------------------------------------------------------------+
 void OnTradeTransaction(const MqlTradeTransaction &trans,
                         const MqlTradeRequest &request,
                         const MqlTradeResult &result)
 {
-   if(trans.type != TRADE_TRANSACTION_DEAL_ADD)
-      return;
-   if(!HistoryDealSelect(trans.deal))
-      return;
-
+   if(trans.type != TRADE_TRANSACTION_DEAL_ADD) return;
+   if(!HistoryDealSelect(trans.deal)) return;
    long   entry  = HistoryDealGetInteger(trans.deal, DEAL_ENTRY);
    double profit = HistoryDealGetDouble(trans.deal, DEAL_PROFIT);
    string sym    = HistoryDealGetString(trans.deal, DEAL_SYMBOL);
 
    if(entry == DEAL_ENTRY_OUT && profit < 0)
       g_last_loss_close = TimeCurrent();
-
-   if(entry == DEAL_ENTRY_IN && InpAlertRevenge && g_last_loss_close > 0)
+   if(entry == DEAL_ENTRY_IN && g_last_loss_close > 0)
    {
       int gap = (int)((TimeCurrent() - g_last_loss_close) / 60);
       if(gap <= InpRevengeMinutes)
-      {
-         string m = StringFormat("\U0001F6D1 פתחת %s רק %d דקות אחרי הפסד — זה מסחר נקמה, "
-                                 "הדפוס שהכי פוגע. קח הפסקה קצרה.", sym, gap);
-         Fire("revenge_trade", sym, trans.position, m);
-      }
+         Fire("revenge_trade", sym, trans.position,
+              StringFormat("פתחת %s רק %d דק' אחרי הפסד — מסחר נקמה. קח הפסקה.", sym, gap));
    }
 }
 
-//+------------------------------------------------------------------+
-//| Deliver an alert across the enabled channels                     |
-//+------------------------------------------------------------------+
 void Fire(string type, string sym, ulong ref, string msg)
 {
+   g_last_warning = msg;
    if(InpPopup)  Alert(msg);
    if(InpMobile) SendNotification(msg);
-   if(StringLen(InpBackendUrl) > 0 && StringLen(InpToken) > 0)
-      PostBackend(type, sym, ref, msg);
-   Print("MentorGuard: ", msg);
+   DrawPanel();
 }
 
-//+------------------------------------------------------------------+
-//| Risk in account currency implied by the stop-loss distance       |
-//+------------------------------------------------------------------+
 double RiskMoney(string sym, double open, double sl, double vol)
 {
-   double tick_value = SymbolInfoDouble(sym, SYMBOL_TRADE_TICK_VALUE);
-   double tick_size  = SymbolInfoDouble(sym, SYMBOL_TRADE_TICK_SIZE);
-   if(tick_size <= 0)
-      return 0.0;
-   double ticks = MathAbs(open - sl) / tick_size;
-   return ticks * tick_value * vol;
+   double tv = SymbolInfoDouble(sym, SYMBOL_TRADE_TICK_VALUE);
+   double ts = SymbolInfoDouble(sym, SYMBOL_TRADE_TICK_SIZE);
+   if(ts <= 0) return 0.0;
+   return MathAbs(open - sl) / ts * tv * vol;
 }
 
-//+------------------------------------------------------------------+
-//| POST the event to the Mentor backend (forwards to Telegram/app)  |
-//+------------------------------------------------------------------+
-void PostBackend(string type, string sym, ulong ref, string msg)
-{
-   string json = StringFormat(
-      "{\"token\":\"%s\",\"type\":\"%s\",\"symbol\":\"%s\",\"ref\":\"%I64u\",\"message\":\"%s\"}",
-      InpToken, type, sym, ref, JsonEscape(msg));
-
-   char post[];
-   int len = StringToCharArray(json, post, 0, WHOLE_ARRAY, CP_UTF8);
-   if(len > 0) ArrayResize(post, len - 1);  // drop the terminating null
-
-   char   result[];
-   string result_headers;
-   string headers = "Content-Type: application/json\r\n";
-   ResetLastError();
-   int code = WebRequest("POST", InpBackendUrl, headers, 5000, post, result, result_headers);
-   if(code == -1)
-      Print("MentorGuard webhook failed (allow the URL in Options->Expert Advisors). err=",
-            GetLastError());
-}
-
-//+------------------------------------------------------------------+
-//| Minimal JSON string escaping                                     |
-//+------------------------------------------------------------------+
-string JsonEscape(string s)
-{
-   StringReplace(s, "\\", "\\\\");
-   StringReplace(s, "\"", "\\\"");
-   StringReplace(s, "\n", " ");
-   StringReplace(s, "\r", " ");
-   return s;
-}
-
-//+------------------------------------------------------------------+
-//| Small ulong-array helpers                                        |
-//+------------------------------------------------------------------+
 bool Contains(const ulong &arr[], ulong v)
 {
-   for(int i = 0; i < ArraySize(arr); i++)
-      if(arr[i] == v) return true;
+   for(int i = 0; i < ArraySize(arr); i++) if(arr[i] == v) return true;
    return false;
 }
 void Append(ulong &arr[], ulong v)
 {
-   int n = ArraySize(arr);
-   ArrayResize(arr, n + 1);
-   arr[n] = v;
+   int k = ArraySize(arr); ArrayResize(arr, k + 1); arr[k] = v;
 }
 //+------------------------------------------------------------------+

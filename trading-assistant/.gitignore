@@ -9,3 +9,5 @@ data/
 # PyInstaller build junk (the built MentorGuard.exe IS committed so downloads work)
 watcher/build/
 watcher/*.spec
+
+mt5-ea/compile.log

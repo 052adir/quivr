@@ -215,13 +215,17 @@ def me(user: User = Depends(current_user)):
 
 
 @app.get("/api/download/watcher")
-def download_watcher(user: User = Depends(current_user)):
+def download_watcher(
+    token: str = "", authorization: str = Header(default=""), db: Session = Depends(get_db)
+):
     """Serve the desktop watcher as a single .exe — no zip, no extraction.
 
-    The user just downloads MentorGuard.exe and double-clicks it; a live window
-    opens and watches their MT5 trades. Works fully locally (Windows alerts),
-    no configuration required.
+    Accepts the token via query param so a plain browser link works (the server
+    sets the filename to MentorGuard.exe, immune to stale cached front-end JS).
     """
+    tok = (token or authorization.removeprefix("Bearer ")).strip()
+    if not db.scalar(select(User).where(User.token == tok)):
+        raise HTTPException(401, "invalid token")
     if not WATCHER_EXE.exists():
         raise HTTPException(503, "שומר המסחר עדיין לא נבנה בשרת הזה")
     return FileResponse(

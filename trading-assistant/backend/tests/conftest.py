@@ -5,10 +5,13 @@ import tempfile
 from pathlib import Path
 
 # Must be set BEFORE importing app modules (config reads env at import time).
+# Force an empty value so the dev .env (real tokens) can't leak into tests.
 _TMP = Path(tempfile.mkdtemp())
 os.environ["DATABASE_URL"] = f"sqlite:///{_TMP / 'test.db'}"
 os.environ["MENTOR_SECRET_KEY"] = "test-secret-key"
-os.environ["ANTHROPIC_API_KEY"] = ""  # force tutor fallback (no network)
+for _k in ("ANTHROPIC_API_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_BOT_USERNAME",
+           "STRIPE_SECRET_KEY", "STRIPE_PRICE_ID", "METAAPI_TOKEN"):
+    os.environ[_k] = ""
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402

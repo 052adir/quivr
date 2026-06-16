@@ -49,6 +49,7 @@ from .schemas import (
     EAEventIn,
     LeadIn,
     LoginIn,
+    MT5SyncIn,
     RegisterIn,
     SettingsIn,
     TokenOut,
@@ -596,6 +597,42 @@ def ea_event(body: EAEventIn, request: Request, db: Session = Depends(get_db)):
             alert.delivered = True
             db.commit()
     return {"ok": True}
+
+
+@app.post("/api/mt5/trades")
+def mt5_trades(body: MT5SyncIn, request: Request, db: Session = Depends(get_db)):
+    """Ingest closed round-trips pushed by the MT5 EA (read from the terminal).
+
+    This is how MT5 history reaches the dashboard/diagnosis WITHOUT the server
+    ever logging into MT5 (which would hijack the terminal). The EA reads and
+    sends; the server only stores.
+    """
+    ratelimit.limit(request, key="mt5sync", max_calls=60, window_secs=60)
+    user = db.scalar(select(User).where(User.token == body.token.strip()))
+    if not user:
+        raise HTTPException(401, "invalid token")
+
+    existing = set(
+        db.scalars(select(RoundTrip.dedup_key).where(RoundTrip.user_id == user.id)).all()
+    )
+    stored = 0
+    for t in body.trips:
+        if t.dedup_key in existing:
+            continue
+        notional = t.entry_price * t.qty
+        et = datetime.fromtimestamp(t.entry_time, tz=timezone.utc).replace(tzinfo=None)
+        xt = datetime.fromtimestamp(t.exit_time, tz=timezone.utc).replace(tzinfo=None)
+        db.add(RoundTrip(
+            user_id=user.id, symbol=t.symbol[:32], qty=t.qty,
+            entry_price=t.entry_price, exit_price=t.exit_price,
+            entry_time=et, exit_time=xt, notional=notional, pnl=t.pnl,
+            pnl_pct=(t.pnl / notional if notional else 0.0),
+            hold_seconds=max(0, t.exit_time - t.entry_time), dedup_key=t.dedup_key[:80],
+        ))
+        existing.add(t.dedup_key)
+        stored += 1
+    db.commit()
+    return {"ok": True, "stored": stored}
 
 
 @app.get("/api/leads")

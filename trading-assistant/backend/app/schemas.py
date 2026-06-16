@@ -58,3 +58,20 @@ class EAEventIn(BaseModel):
     symbol: str | None = None
     ref: str | None = None
     severity: str = "warning"
+
+
+class MT5TripIn(BaseModel):
+    """One closed round-trip pushed by the EA (read from the terminal)."""
+    symbol: str
+    qty: float
+    entry_price: float
+    exit_price: float
+    entry_time: int  # epoch seconds
+    exit_time: int
+    pnl: float
+    dedup_key: str
+
+
+class MT5SyncIn(BaseModel):
+    token: str
+    trips: list[MT5TripIn]

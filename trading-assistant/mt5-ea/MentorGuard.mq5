@@ -18,6 +18,10 @@ input int    InpGraceSeconds   = 20;     // Seconds before the no-stop popup (ba
 input bool   InpPopup          = true;   // MT5 popup + sound
 input bool   InpMobile         = true;   // Push to the MetaTrader mobile app
 input color  InpAccent         = clrSpringGreen;
+input string InpBackendUrl     = "";     // Mentor sync URL (optional) e.g. http://localhost:8000/api/mt5/trades
+input string InpToken          = "";     // Your Mentor token (optional, for the app dashboard)
+
+int g_sync_counter = 0;
 
 string   PFX = "MG_";
 ulong    g_warned_nostop[];
@@ -30,6 +34,7 @@ bool     g_flash          = false; // flashing toggle
 int OnInit()
 {
    ComputeRevengeCost();
+   SyncHistory();
    EventSetTimer(1);
    DrawPanel();
    return(INIT_SUCCEEDED);
@@ -47,6 +52,7 @@ void OnTimer()
    CheckNoStop();
    DrawPanel();
    DrawBanner();
+   if(++g_sync_counter % 300 == 0) SyncHistory();  // push history every ~5 min
 }
 
 //+------------------------------------------------------------------+
@@ -290,6 +296,90 @@ double RiskMoney(string sym, double open, double sl, double vol)
    double ts = SymbolInfoDouble(sym, SYMBOL_TRADE_TICK_SIZE);
    if(ts <= 0) return 0.0;
    return MathAbs(open - sl) / ts * tv * vol;
+}
+
+//+------------------------------------------------------------------+
+//| Read closed round-trips and push them to the Mentor app          |
+//| (so the dashboard/diagnosis update — without the server ever      |
+//|  logging into MT5). EA only reads; never changes the login.       |
+//+------------------------------------------------------------------+
+void SyncHistory()
+{
+   if(StringLen(InpBackendUrl) == 0 || StringLen(InpToken) == 0) return;
+   datetime from = TimeCurrent() - 90 * 24 * 60 * 60;
+   if(!HistorySelect(from, TimeCurrent())) return;
+
+   ulong ids[]; string syms[]; double inVol[], inPV[], outVol[], outPV[], net[];
+   datetime opent[], closet[];
+   int total = HistoryDealsTotal();
+   for(int i = 0; i < total; i++)
+   {
+      ulong deal = HistoryDealGetTicket(i);
+      if(deal == 0) continue;
+      long dt = HistoryDealGetInteger(deal, DEAL_TYPE);
+      if(dt != DEAL_TYPE_BUY && dt != DEAL_TYPE_SELL) continue;
+      ulong pid = (ulong)HistoryDealGetInteger(deal, DEAL_POSITION_ID);
+      long entry = HistoryDealGetInteger(deal, DEAL_ENTRY);
+      datetime t = (datetime)HistoryDealGetInteger(deal, DEAL_TIME);
+      double price = HistoryDealGetDouble(deal, DEAL_PRICE);
+      double vol = HistoryDealGetDouble(deal, DEAL_VOLUME);
+      double pr = HistoryDealGetDouble(deal, DEAL_PROFIT)
+                + HistoryDealGetDouble(deal, DEAL_SWAP)
+                + HistoryDealGetDouble(deal, DEAL_COMMISSION);
+      int idx = -1;
+      for(int k = 0; k < ArraySize(ids); k++) if(ids[k] == pid) { idx = k; break; }
+      if(idx < 0)
+      {
+         idx = ArraySize(ids);
+         ArrayResize(ids, idx + 1); ArrayResize(syms, idx + 1);
+         ArrayResize(inVol, idx + 1); ArrayResize(inPV, idx + 1);
+         ArrayResize(outVol, idx + 1); ArrayResize(outPV, idx + 1);
+         ArrayResize(net, idx + 1); ArrayResize(opent, idx + 1); ArrayResize(closet, idx + 1);
+         ids[idx] = pid; syms[idx] = HistoryDealGetString(deal, DEAL_SYMBOL);
+         inVol[idx] = 0; inPV[idx] = 0; outVol[idx] = 0; outPV[idx] = 0;
+         net[idx] = 0; opent[idx] = 0; closet[idx] = 0;
+      }
+      if(entry == DEAL_ENTRY_IN)
+      {
+         inVol[idx] += vol; inPV[idx] += price * vol;
+         if(opent[idx] == 0 || t < opent[idx]) opent[idx] = t;
+      }
+      else if(entry == DEAL_ENTRY_OUT)
+      {
+         outVol[idx] += vol; outPV[idx] += price * vol; net[idx] += pr;
+         if(t > closet[idx]) closet[idx] = t;
+      }
+   }
+
+   string trips = "";
+   int count = 0;
+   for(int i = 0; i < ArraySize(ids) && count < 300; i++)
+   {
+      if(inVol[i] <= 0 || outVol[i] <= 0) continue;  // only closed positions
+      double ep = inPV[i] / inVol[i];
+      double xp = outPV[i] / outVol[i];
+      string obj = StringFormat(
+         "{\"symbol\":\"%s\",\"qty\":%.2f,\"entry_price\":%.5f,\"exit_price\":%.5f,"
+         "\"entry_time\":%I64d,\"exit_time\":%I64d,\"pnl\":%.2f,\"dedup_key\":\"mt5|%I64u\"}",
+         syms[i], inVol[i], ep, xp, (long)opent[i], (long)closet[i], net[i], ids[i]);
+      if(count > 0) trips += ",";
+      trips += obj;
+      count++;
+   }
+   if(count == 0) return;
+
+   string json = StringFormat("{\"token\":\"%s\",\"trips\":[%s]}", InpToken, trips);
+   char post[]; char result[]; string rh;
+   int len = StringToCharArray(json, post, 0, WHOLE_ARRAY, CP_UTF8);
+   if(len > 0) ArrayResize(post, len - 1);
+   ResetLastError();
+   int code = WebRequest("POST", InpBackendUrl, "Content-Type: application/json\r\n",
+                         8000, post, result, rh);
+   if(code == -1)
+      Print("MentorGuard sync failed — allow the URL in Options->Expert Advisors. err=",
+            GetLastError());
+   else
+      Print("MentorGuard synced ", count, " trades to the app.");
 }
 bool Contains(const ulong &a[], ulong v){ for(int i=0;i<ArraySize(a);i++) if(a[i]==v) return true; return false; }
 void Append(ulong &a[], ulong v){ int k=ArraySize(a); ArrayResize(a,k+1); a[k]=v; }

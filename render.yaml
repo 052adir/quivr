@@ -1,0 +1,17 @@
+# Render Blueprint — deploys the Mentor Trade backend (which also serves the
+# landing page at / and the app at /app). Free plan, no credit card.
+services:
+  - type: web
+    name: mentor-trade
+    runtime: python
+    rootDir: trading-assistant/backend
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+      - key: MENTOR_ENV
+        value: production
+      - key: MENTOR_SECRET_KEY
+        generateValue: true

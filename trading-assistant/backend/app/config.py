@@ -35,6 +35,12 @@ class Settings:
 
     sync_interval_seconds: int = int(os.getenv("SYNC_INTERVAL_SECONDS", "60"))
 
+    # Cloud MT5 read-only access via MetaApi.cloud. A single business-side key;
+    # end users never see it — they only enter account + investor password +
+    # server on the website, and the cloud reads their trades read-only.
+    metaapi_token: str = os.getenv("METAAPI_TOKEN", "").strip()
+    metaapi_region: str = os.getenv("METAAPI_REGION", "new-york").strip()
+
     # Subscriptions.
     trial_days: int = int(os.getenv("TRIAL_DAYS", "7"))
     stripe_secret_key: str = os.getenv("STRIPE_SECRET_KEY", "").strip()
@@ -44,6 +50,10 @@ class Settings:
     @property
     def ai_enabled(self) -> bool:
         return bool(self.anthropic_api_key)
+
+    @property
+    def metaapi_enabled(self) -> bool:
+        return bool(self.metaapi_token)
 
     @property
     def billing_enabled(self) -> bool:

@@ -225,11 +225,15 @@ def _verify_mt5(conn) -> None:
 # --------------------------------------------------------------------------- #
 # Registry
 # --------------------------------------------------------------------------- #
+# NOTE: MT5 is intentionally NOT registered here. The MetaTrader5 Python API's
+# login() hijacks the running terminal's session (forcing it into the investor /
+# read-only account), which blocks the user from trading. MT5 is therefore
+# monitored only by the in-terminal EA (mt5-ea/MentorGuard.ex5), which reads
+# positions without ever changing the login.
 _REGISTRY = {
     "demo": (_fetch_demo, None),
     "binance": (_fetch_binance, _verify_binance),
     "ccxt": (_fetch_ccxt, _verify_ccxt),
-    "mt5": (_fetch_mt5, _verify_mt5),
 }
 
 SUPPORTED_PROVIDERS = list(_REGISTRY.keys())

@@ -14,7 +14,10 @@ def _conn(**kw):
 
 
 def test_supported_providers():
-    assert set(connectors.SUPPORTED_PROVIDERS) >= {"demo", "binance", "ccxt", "mt5"}
+    # MT5 is intentionally not a server-side connector (its login() hijacks the
+    # terminal); it is handled by the in-terminal EA instead.
+    assert set(connectors.SUPPORTED_PROVIDERS) >= {"demo", "binance", "ccxt"}
+    assert "mt5" not in connectors.SUPPORTED_PROVIDERS
 
 
 def test_demo_returns_fills():

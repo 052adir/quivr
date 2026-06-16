@@ -335,6 +335,11 @@ def add_connection(
     provider = (body.provider or "binance").strip().lower()
     if body.api_key.strip().upper() == "DEMO":
         provider = "demo"
+    if provider == "mt5":
+        # MT5 must never be driven from the server (login() hijacks the terminal).
+        raise HTTPException(
+            400, "ל-MT5 השתמש בבוט שמותקן בטרמינל (MentorGuard EA) — לא דרך חיבור כאן."
+        )
     if provider not in connectors.SUPPORTED_PROVIDERS:
         raise HTTPException(400, f"פלטפורמה לא נתמכת: {provider}")
 

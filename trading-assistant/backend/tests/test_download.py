@@ -11,5 +11,4 @@ def test_returns_zip_or_unavailable(auth):
     # 200 (exe built on this machine) or 503 (not built, e.g. CI) — never 500.
     assert r.status_code in (200, 503)
     if r.status_code == 200:
-        assert r.headers["content-type"] == "application/zip"
-        assert r.content[:2] == b"PK"  # zip magic
+        assert r.content[:2] == b"MZ"  # Windows .exe magic — single file, no zip

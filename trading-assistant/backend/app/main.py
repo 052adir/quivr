@@ -216,41 +216,18 @@ def me(user: User = Depends(current_user)):
 
 @app.get("/api/download/watcher")
 def download_watcher(user: User = Depends(current_user)):
-    """Serve the desktop watcher as a ZIP, pre-linked to this user's account.
+    """Serve the desktop watcher as a single .exe — no zip, no extraction.
 
-    The user just extracts and double-clicks MentorGuard.exe — no setup. The
-    bundled .ini carries their token + webhook URL so live alerts flow straight
-    to their account, Telegram, and dashboard.
+    The user just downloads MentorGuard.exe and double-clicks it; a live window
+    opens and watches their MT5 trades. Works fully locally (Windows alerts),
+    no configuration required.
     """
     if not WATCHER_EXE.exists():
         raise HTTPException(503, "שומר המסחר עדיין לא נבנה בשרת הזה")
-
-    ini = (
-        "[mentor]\n"
-        f"backend_url = {settings.app_base_url}/api/ea/event\n"
-        f"token = {user.token}\n"
-        "max_risk_pct = 2.0\n"
-        "grace_seconds = 60\n"
-        "revenge_minutes = 30\n"
-    )
-    readme = (
-        "מנטור — שומר המסחר\r\n"
-        "================\r\n"
-        "1. ודא ש-MetaTrader 5 פתוח ומחובר לחשבון.\r\n"
-        "2. לחץ פעמיים על MentorGuard.exe.\r\n"
-        "3. זהו. הוא ישמור עליך ויתריע על טעויות בזמן אמת.\r\n"
-        "(קריאה בלבד — לא סוחר. השאר את שני הקבצים יחד באותה תיקייה.)\r\n"
-    )
-    buf = io.BytesIO()
-    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
-        z.write(WATCHER_EXE, "MentorGuard.exe")
-        z.writestr("mentor_watcher.ini", ini)
-        z.writestr("קרא_אותי.txt", readme)
-    buf.seek(0)
-    return Response(
-        content=buf.getvalue(),
-        media_type="application/zip",
-        headers={"Content-Disposition": "attachment; filename=MentorGuard.zip"},
+    return FileResponse(
+        WATCHER_EXE,
+        filename="MentorGuard.exe",
+        media_type="application/octet-stream",
     )
 
 

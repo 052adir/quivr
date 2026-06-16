@@ -524,12 +524,12 @@ async function downloadWatcher() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "MentorGuard.zip";
+    a.download = "MentorGuard.exe";
     document.body.appendChild(a);
     a.click();
     a.remove();
     URL.revokeObjectURL(url);
-    note.textContent = "ירד! חלץ את ה-ZIP, ודא ש-MT5 פתוח, ולחץ פעמיים על MentorGuard.exe.";
+    note.textContent = "ירד! ודא ש-MT5 פתוח, ולחץ פעמיים על MentorGuard.exe — ייפתח חלון.";
   } catch (e) {
     note.textContent = "שגיאה בהורדה: " + e.message;
   }

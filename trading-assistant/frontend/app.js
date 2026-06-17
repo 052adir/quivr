@@ -538,3 +538,45 @@ async function downloadWatcher() {
 if (token) {
   showApp().catch(() => logout());
 }
+
+// --------------------------------------------------------------------------
+// EA connection helper: surface the user's token + backend URL so a trader can
+// configure the MT5 bot without DevTools. Purely additive (reads existing state).
+// --------------------------------------------------------------------------
+function fillEaConnect() {
+  const tok = localStorage.getItem(TOKEN_KEY) || token || "";
+  const origin = window.location.origin;
+  const tokEl = $("ea-token");
+  const urlEl = $("ea-url");
+  const orEl = $("ea-origin");
+  if (tokEl) tokEl.value = tok;
+  if (urlEl) urlEl.value = origin + "/api/mt5/trades";
+  if (orEl) orEl.textContent = origin;
+}
+
+async function copyToClipboard(value, btn) {
+  try {
+    await navigator.clipboard.writeText(value);
+  } catch (e) {
+    /* clipboard blocked — the value is still visible/selectable in the field */
+  }
+  const original = btn.textContent;
+  btn.textContent = "הועתק ✓";
+  setTimeout(() => (btn.textContent = original), 1500);
+}
+
+const _copyTokenBtn = $("copy-token");
+if (_copyTokenBtn) {
+  _copyTokenBtn.addEventListener("click", () => {
+    fillEaConnect();
+    copyToClipboard($("ea-token").value, _copyTokenBtn);
+  });
+}
+const _copyUrlBtn = $("copy-url");
+if (_copyUrlBtn) {
+  _copyUrlBtn.addEventListener("click", () => {
+    fillEaConnect();
+    copyToClipboard($("ea-url").value, _copyUrlBtn);
+  });
+}
+fillEaConnect();

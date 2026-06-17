@@ -201,6 +201,21 @@
           </ol>
           <button class="btn small" id="dl-watcher">הורד את הבוט (MentorGuard.ex5)</button>
           <div class="note" id="dl-watcher-note" style="margin-top:8px"></div>
+
+          <div id="ea-connect" style="margin-top:16px; padding-top:14px; border-top:1px solid rgba(255,255,255,0.08)">
+            <p class="note"><b>הגדרות לחיבור הבוט</b> — כשתגרור את MentorGuard על הגרף, בלשונית <b>Inputs</b> הזן את שני הערכים האלה (לחץ "העתק"):</p>
+            <div class="field">
+              <label>הטוקן שלך (InpToken)</label>
+              <input id="ea-token" type="text" readonly value="" />
+              <button class="btn small" id="copy-token" style="margin-top:6px">העתק טוקן</button>
+            </div>
+            <div class="field">
+              <label>כתובת השרת (InpBackendUrl)</label>
+              <input id="ea-url" type="text" readonly value="" />
+              <button class="btn small" id="copy-url" style="margin-top:6px">העתק כתובת</button>
+            </div>
+            <p class="note" style="margin-top:10px">⚠️ צעד חובה ב-MT5: <b>Tools → Options → Expert Advisors</b> → סמן <b>"Allow WebRequest for listed URL"</b> → הוסף את הכתובת: <code id="ea-origin"></code></p>
+          </div>
         </div>
 
         <div class="panel">

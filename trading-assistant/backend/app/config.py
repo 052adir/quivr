@@ -12,7 +12,10 @@ load_dotenv(_BACKEND_DIR / ".env")
 
 class Settings:
     environment: str = os.getenv("MENTOR_ENV", "development").strip()
-    database_url: str = os.getenv("DATABASE_URL", "sqlite:///./mentor_trade.db")
+    # Render/Heroku hand out "postgres://" URLs; SQLAlchemy 2.x needs "postgresql://".
+    database_url: str = os.getenv(
+        "DATABASE_URL", "sqlite:///./mentor_trade.db"
+    ).replace("postgres://", "postgresql://", 1)
 
     # Secret used to derive the encryption key for stored exchange credentials.
     # If unset, a stable key is generated and persisted to backend/.secret_key.

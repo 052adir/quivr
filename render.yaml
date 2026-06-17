@@ -15,3 +15,13 @@ services:
         value: production
       - key: MENTOR_SECRET_KEY
         generateValue: true
+      # Persistent database so user accounts survive restarts/sleep (free SQLite
+      # on Render is wiped on every redeploy/spin-up). Wired automatically.
+      - key: DATABASE_URL
+        fromDatabase:
+          name: mentor-db
+          property: connectionString
+
+databases:
+  - name: mentor-db
+    plan: free

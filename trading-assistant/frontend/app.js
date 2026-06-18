@@ -2,6 +2,18 @@
 
 const TOKEN_KEY = "mentor_token";
 let token = localStorage.getItem(TOKEN_KEY) || "";
+
+// One-click login: ?token=... logs the user straight in (no typing). Used by
+// magic links and the desktop watcher onboarding. The token is then persisted
+// and the URL cleaned so it isn't left in history.
+{
+  const _urlToken = new URLSearchParams(location.search).get("token");
+  if (_urlToken && _urlToken.trim()) {
+    token = _urlToken.trim();
+    localStorage.setItem(TOKEN_KEY, token);
+    history.replaceState(null, "", location.pathname);
+  }
+}
 let equityChart = null;
 
 // --------------------------------------------------------------------------

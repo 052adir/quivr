@@ -75,3 +75,24 @@ class MT5TripIn(BaseModel):
 class MT5SyncIn(BaseModel):
     token: str
     trips: list[MT5TripIn]
+
+
+class WebhookEventIn(BaseModel):
+    """A single real-time trade transaction pushed by the MentorTrade EA.
+
+    Sent on every open/close (MT5 OnTradeTransaction). The server runs a live
+    rule engine on it (revenge / averaging-down / no-stop) and persists it.
+    """
+    token: str
+    deal_id: int = 0
+    position_id: int = 0
+    symbol: str = ""
+    action: str = ""   # "buy" | "sell"
+    entry: str = ""    # "in" (opened) | "out" (closed)
+    volume: float = 0.0
+    price: float = 0.0
+    sl: float = 0.0
+    tp: float = 0.0
+    profit: float = 0.0
+    balance: float = 0.0
+    equity: float = 0.0

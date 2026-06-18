@@ -53,6 +53,7 @@ from .schemas import (
     RegisterIn,
     SettingsIn,
     TokenOut,
+    WebhookEventIn,
 )
 
 logging.basicConfig(
@@ -655,6 +656,104 @@ def mt5_trades(body: MT5SyncIn, request: Request, db: Session = Depends(get_db))
         stored += 1
     db.commit()
     return {"ok": True, "stored": stored}
+
+
+# Real-time rule-engine state, per user (resets on restart). Tracks open
+# positions and the time of the last losing close, for revenge/averaging checks.
+_RT_STATE: dict[int, dict] = {}
+
+_FLAG_MESSAGES = {
+    "No_Stop_Loss": "פתחת {symbol} בלי stop-loss. שים סטופ עכשיו — הפסד אחד בלי סטופ מוחק כמה רווחים.",
+    "Revenge_Trade": "פתחת {symbol} זמן קצר אחרי הפסד. ייתכן מסחר נקמה — קח הפסקה לפני העסקה הבאה.",
+    "Averaging_Down": "הוספת פוזיציה ב-{symbol} באותו כיוון בזמן שכבר יש לך פוזיציה פתוחה — מיצוע הפסד מסוכן.",
+}
+
+
+@app.post("/api/mt5/webhook")
+def mt5_webhook(body: WebhookEventIn, request: Request, db: Session = Depends(get_db)):
+    """Real-time trade event from the MentorTrade EA → live rule engine.
+
+    The EA posts one transaction on every open/close (OnTradeTransaction). We
+    flag the three costly mistakes (revenge / averaging-down / no-stop), store
+    alerts + closed round-trips so the cloud dashboard fills, and return the
+    flags. Read-only: we never send orders back.
+    """
+    ratelimit.limit(request, key="mt5webhook", max_calls=240, window_secs=60)
+    user = db.scalar(select(User).where(User.token == body.token.strip()))
+    if not user:
+        log.warning("MT5 webhook: invalid token")
+        return {"ok": False, "error": "invalid token"}
+
+    st = _RT_STATE.setdefault(user.id, {"last_loss_close": None, "open": {}})
+    now = datetime.utcnow()
+    action = body.action.strip().lower()
+    entry = body.entry.strip().lower()
+    flags: list[str] = []
+
+    if entry == "in":  # a position was opened
+        if body.sl == 0.0:
+            flags.append("No_Stop_Loss")
+        last = st["last_loss_close"]
+        if last and (now - last) <= timedelta(minutes=15):
+            flags.append("Revenge_Trade")
+        for pos in st["open"].values():
+            if pos["symbol"] == body.symbol and pos["action"] == action:
+                flags.append("Averaging_Down")
+                break
+        st["open"][body.position_id] = {
+            "symbol": body.symbol, "action": action,
+            "entry_price": body.price, "entry_time": now, "volume": body.volume,
+        }
+
+    elif entry == "out":  # a position was closed
+        if body.profit < 0:
+            st["last_loss_close"] = now
+        opened = st["open"].pop(body.position_id, None)
+        # persist the closed round-trip so the dashboard stats fill
+        dedup = f"wh-{body.position_id or body.deal_id}"
+        if not db.scalar(
+            select(RoundTrip).where(RoundTrip.user_id == user.id, RoundTrip.dedup_key == dedup)
+        ):
+            entry_price = opened["entry_price"] if opened else body.price
+            entry_time = opened["entry_time"] if opened else now
+            qty = (opened["volume"] if opened else body.volume) or body.volume
+            notional = entry_price * qty
+            db.add(RoundTrip(
+                user_id=user.id, symbol=(body.symbol or "?")[:32], qty=qty,
+                entry_price=entry_price, exit_price=body.price,
+                entry_time=entry_time, exit_time=now, notional=notional,
+                pnl=body.profit, pnl_pct=(body.profit / notional if notional else 0.0),
+                hold_seconds=max(0, int((now - entry_time).total_seconds())),
+                dedup_key=dedup[:80],
+            ))
+
+    # store + push an alert for every flag raised
+    for flag in flags:
+        msg = _FLAG_MESSAGES.get(flag, flag).format(symbol=body.symbol or "החשבון")
+        dedup = f"wh|{flag}|{body.symbol}|{body.position_id}"
+        if db.scalar(select(Alert).where(Alert.user_id == user.id, Alert.dedup_key == dedup)):
+            continue
+        alert = Alert(
+            user_id=user.id, type=flag[:40], severity="warning",
+            title="התראה חיה מ-MT5", message=msg,
+            symbol=(body.symbol or None), dedup_key=dedup,
+        )
+        db.add(alert)
+        if user.telegram_chat_id and telegram.send_message(user.telegram_chat_id, f"⚠️ {msg}"):
+            alert.delivered = True
+
+    db.commit()
+
+    # prominent log line for observability
+    if flags:
+        log.warning("🚨 MT5 %s | user=%s %s %s @%.5f sl=%.5f pnl=%.2f | FLAGS: %s",
+                    entry.upper(), user.email, action, body.symbol, body.price,
+                    body.sl, body.profit, ", ".join(flags))
+    else:
+        log.info("MT5 %s | user=%s %s %s @%.5f (clean)",
+                 entry.upper(), user.email, action, body.symbol, body.price)
+
+    return {"ok": True, "flags": flags}
 
 
 @app.get("/api/leads")

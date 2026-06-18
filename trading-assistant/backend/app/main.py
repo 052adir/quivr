@@ -42,7 +42,7 @@ from . import (
 from .analysis import summarize
 from .config import settings
 from .database import SessionLocal, get_db, init_db
-from .models import Alert, ChatMessage, Connection, Lead, RoundTrip, User
+from .models import Alert, ChatMessage, Connection, Lead, OpenPosition, RoundTrip, User
 from .schemas import (
     ChatIn,
     ConnectionIn,
@@ -658,10 +658,8 @@ def mt5_trades(body: MT5SyncIn, request: Request, db: Session = Depends(get_db))
     return {"ok": True, "stored": stored}
 
 
-# Real-time rule-engine state, per user (resets on restart). Tracks open
-# positions and the time of the last losing close, for revenge/averaging checks.
-_RT_STATE: dict[int, dict] = {}
-
+# All rule-engine state is DB-backed (OpenPosition + RoundTrip tables) so it
+# survives Render restarts / spin-downs — never kept in process memory.
 _FLAG_MESSAGES = {
     "No_Stop_Loss": "פתחת {symbol} בלי stop-loss. שים סטופ עכשיו — הפסד אחד בלי סטופ מוחק כמה רווחים.",
     "Revenge_Trade": "פתחת {symbol} זמן קצר אחרי הפסד. ייתכן מסחר נקמה — קח הפסקה לפני העסקה הבאה.",
@@ -684,7 +682,6 @@ def mt5_webhook(body: WebhookEventIn, request: Request, db: Session = Depends(ge
         log.warning("MT5 webhook: invalid token")
         return {"ok": False, "error": "invalid token"}
 
-    st = _RT_STATE.setdefault(user.id, {"last_loss_close": None, "open": {}})
     now = datetime.utcnow()
     action = body.action.strip().lower()
     entry = body.entry.strip().lower()
@@ -693,30 +690,64 @@ def mt5_webhook(body: WebhookEventIn, request: Request, db: Session = Depends(ge
     if entry == "in":  # a position was opened
         if body.sl == 0.0:
             flags.append("No_Stop_Loss")
-        last = st["last_loss_close"]
-        if last and (now - last) <= timedelta(minutes=15):
+
+        # Revenge: most recent CLOSED losing trade within 15 min — queried from
+        # the DB, so it still works after a server restart.
+        last_loss = db.scalar(
+            select(RoundTrip)
+            .where(RoundTrip.user_id == user.id, RoundTrip.pnl < 0)
+            .order_by(RoundTrip.exit_time.desc())
+            .limit(1)
+        )
+        if last_loss and (now - last_loss.exit_time) <= timedelta(minutes=15):
             flags.append("Revenge_Trade")
-        for pos in st["open"].values():
-            if pos["symbol"] == body.symbol and pos["action"] == action:
-                flags.append("Averaging_Down")
-                break
-        st["open"][body.position_id] = {
-            "symbol": body.symbol, "action": action,
-            "entry_price": body.price, "entry_time": now, "volume": body.volume,
-        }
+
+        # Averaging down: a position is already open in the same symbol+direction
+        # (read from the persisted open_positions table, not memory).
+        prior = db.scalar(
+            select(OpenPosition).where(
+                OpenPosition.user_id == user.id,
+                OpenPosition.symbol == body.symbol,
+                OpenPosition.action == action,
+            ).limit(1)
+        )
+        if prior:
+            flags.append("Averaging_Down")
+
+        # upsert this open position (by user + position_id)
+        existing = db.scalar(
+            select(OpenPosition).where(
+                OpenPosition.user_id == user.id,
+                OpenPosition.position_id == body.position_id,
+            )
+        )
+        if existing:
+            existing.symbol = body.symbol
+            existing.action = action
+            existing.entry_price = body.price
+            existing.volume = body.volume
+            existing.opened_at = now
+        else:
+            db.add(OpenPosition(
+                user_id=user.id, position_id=body.position_id, symbol=body.symbol,
+                action=action, entry_price=body.price, volume=body.volume, opened_at=now,
+            ))
 
     elif entry == "out":  # a position was closed
-        if body.profit < 0:
-            st["last_loss_close"] = now
-        opened = st["open"].pop(body.position_id, None)
+        opened = db.scalar(
+            select(OpenPosition).where(
+                OpenPosition.user_id == user.id,
+                OpenPosition.position_id == body.position_id,
+            )
+        )
         # persist the closed round-trip so the dashboard stats fill
         dedup = f"wh-{body.position_id or body.deal_id}"
         if not db.scalar(
             select(RoundTrip).where(RoundTrip.user_id == user.id, RoundTrip.dedup_key == dedup)
         ):
-            entry_price = opened["entry_price"] if opened else body.price
-            entry_time = opened["entry_time"] if opened else now
-            qty = (opened["volume"] if opened else body.volume) or body.volume
+            entry_price = opened.entry_price if opened else body.price
+            entry_time = opened.opened_at if opened else now
+            qty = (opened.volume if opened else body.volume) or body.volume
             notional = entry_price * qty
             db.add(RoundTrip(
                 user_id=user.id, symbol=(body.symbol or "?")[:32], qty=qty,
@@ -726,6 +757,8 @@ def mt5_webhook(body: WebhookEventIn, request: Request, db: Session = Depends(ge
                 hold_seconds=max(0, int((now - entry_time).total_seconds())),
                 dedup_key=dedup[:80],
             ))
+        if opened:
+            db.delete(opened)
 
     # store + push an alert for every flag raised
     for flag in flags:

@@ -3,6 +3,7 @@
 from datetime import datetime, timezone
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     DateTime,
     Float,
@@ -155,6 +156,30 @@ class ChatMessage(Base):
     role: Mapped[str] = mapped_column(String(12))  # user / assistant
     content: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, index=True)
+
+
+class OpenPosition(Base):
+    """A currently-open MT5 position, tracked for the live rule engine.
+
+    Persisted in the DB (not in server memory) so revenge / averaging-down
+    detection survives Render restarts and spin-downs. A row is created when a
+    position opens and deleted when it closes.
+    """
+
+    __tablename__ = "open_positions"
+    __table_args__ = (
+        UniqueConstraint("user_id", "position_id", name="uq_user_open_position"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    # MT5 position id can exceed 32-bit, so BigInteger.
+    position_id: Mapped[int] = mapped_column(BigInteger, index=True)
+    symbol: Mapped[str] = mapped_column(String(32), index=True)
+    action: Mapped[str] = mapped_column(String(4))  # buy / sell
+    entry_price: Mapped[float] = mapped_column(Float)
+    volume: Mapped[float] = mapped_column(Float, default=0.0)
+    opened_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, index=True)
 
 
 class Lead(Base):

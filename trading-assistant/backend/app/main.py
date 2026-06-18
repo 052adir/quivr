@@ -259,6 +259,39 @@ def download_ea(
     )
 
 
+@app.get("/api/download/watcher-ea")
+def download_watcher_ea():
+    """Serve the real-time MentorTrade watcher EA (.ex5) as a forced download.
+
+    Public (the EA is useless without a valid token) and sent as an attachment
+    with octet-stream, so the browser downloads it cleanly instead of trying to
+    render it as text.
+    """
+    path = FRONTEND_DIR / "MentorTrade_Watcher.ex5"
+    if not path.exists():
+        raise HTTPException(503, "הבוט עדיין לא נבנה בשרת הזה")
+    return FileResponse(
+        path,
+        filename="MentorTrade_Watcher.ex5",
+        media_type="application/octet-stream",
+    )
+
+
+@app.get("/api/download/installer")
+def download_installer():
+    """One-click installer (.bat): downloads the EA and copies it into every
+    MT5 terminal's Experts folder automatically, so the user skips the manual
+    'open data folder / paste' step."""
+    path = FRONTEND_DIR / "Install-MentorTrade.bat"
+    if not path.exists():
+        raise HTTPException(503, "המתקין עדיין לא זמין בשרת הזה")
+    return FileResponse(
+        path,
+        filename="Install-MentorTrade.bat",
+        media_type="application/octet-stream",
+    )
+
+
 @app.post("/api/telegram/connect")
 def telegram_connect(user: User = Depends(current_user), db: Session = Depends(get_db)):
     """Issue a one-time link code (+ deep link) to connect the user's Telegram."""

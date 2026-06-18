@@ -31,6 +31,11 @@ void OnTradeTransaction(const MqlTradeTransaction &trans,
                         const MqlTradeRequest &request,
                         const MqlTradeResult &result)
   {
+   if(trans.type == TRADE_TRANSACTION_POSITION)  // SL/TP changed on a position
+     {
+      ReportModify(trans.position);
+      return;
+     }
    if(trans.type != TRADE_TRANSACTION_DEAL_ADD)
       return;
 
@@ -64,9 +69,12 @@ void OnTradeTransaction(const MqlTradeTransaction &trans,
       tp = PositionGetDouble(POSITION_TP);
      }
 
-   double balance = AccountInfoDouble(ACCOUNT_BALANCE);
-   double equity  = AccountInfoDouble(ACCOUNT_EQUITY);
-   double netpnl  = profit + swap + commission;
+   double balance     = AccountInfoDouble(ACCOUNT_BALANCE);
+   double equity      = AccountInfoDouble(ACCOUNT_EQUITY);
+   double free_margin = AccountInfoDouble(ACCOUNT_MARGIN_FREE);
+   double contract    = SymbolInfoDouble(symbol, SYMBOL_TRADE_CONTRACT_SIZE);
+   double notional    = volume * contract * price;
+   double netpnl      = profit + swap + commission;
 
    //--- build JSON manually (no external libraries) ---
    string json = "{";
@@ -82,7 +90,38 @@ void OnTradeTransaction(const MqlTradeTransaction &trans,
    json += "\"tp\":"          + DoubleToString(tp, 5) + ",";
    json += "\"profit\":"      + DoubleToString(netpnl, 2) + ",";
    json += "\"balance\":"     + DoubleToString(balance, 2) + ",";
-   json += "\"equity\":"      + DoubleToString(equity, 2);
+   json += "\"equity\":"      + DoubleToString(equity, 2) + ",";
+   json += "\"free_margin\":" + DoubleToString(free_margin, 2) + ",";
+   json += "\"notional\":"    + DoubleToString(notional, 2);
+   json += "}";
+
+   SendToServer(json);
+  }
+
+//+------------------------------------------------------------------+
+//| Report an SL/TP change on an open position (for SL-dragging)     |
+//+------------------------------------------------------------------+
+void ReportModify(ulong position_ticket)
+  {
+   if(!PositionSelectByTicket(position_ticket))
+      return;
+
+   string symbol = PositionGetString(POSITION_SYMBOL);
+   long   ptype  = PositionGetInteger(POSITION_TYPE);
+   string action = (ptype == POSITION_TYPE_BUY) ? "buy" : "sell";
+   double sl     = PositionGetDouble(POSITION_SL);
+   double tp     = PositionGetDouble(POSITION_TP);
+   double price  = PositionGetDouble(POSITION_PRICE_OPEN);
+
+   string json = "{";
+   json += "\"token\":\""     + UserToken + "\",";
+   json += "\"position_id\":" + IntegerToString((long)position_ticket) + ",";
+   json += "\"symbol\":\""    + symbol + "\",";
+   json += "\"action\":\""    + action + "\",";
+   json += "\"entry\":\"modify\",";
+   json += "\"price\":"       + DoubleToString(price, 5) + ",";
+   json += "\"sl\":"          + DoubleToString(sl, 5) + ",";
+   json += "\"tp\":"          + DoubleToString(tp, 5);
    json += "}";
 
    SendToServer(json);

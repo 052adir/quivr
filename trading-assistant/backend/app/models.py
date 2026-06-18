@@ -179,6 +179,8 @@ class OpenPosition(Base):
     action: Mapped[str] = mapped_column(String(4))  # buy / sell
     entry_price: Mapped[float] = mapped_column(Float)
     volume: Mapped[float] = mapped_column(Float, default=0.0)
+    # last-known stop-loss, used to detect SL dragging on a modify event.
+    sl: Mapped[float] = mapped_column(Float, default=0.0)
     opened_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, index=True)
 
 

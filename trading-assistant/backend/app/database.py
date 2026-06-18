@@ -35,6 +35,33 @@ def init_db() -> None:
 
     Base.metadata.create_all(bind=engine)
     _migrate()
+    _ensure_added_columns()
+
+
+def _ensure_added_columns() -> None:
+    """Add columns introduced after a table's first release — on any backend.
+
+    create_all() never alters an existing table, so when a model gains a column
+    we add it here, idempotently. ALTER TABLE ADD COLUMN works on both SQLite
+    and PostgreSQL, so this covers local dev and production alike.
+    """
+    from sqlalchemy import inspect
+
+    added = {
+        "open_positions": [("sl", "FLOAT DEFAULT 0.0")],
+    }
+    insp = inspect(engine)
+    tables = set(insp.get_table_names())
+    with engine.begin() as conn:
+        for table, cols in added.items():
+            if table not in tables:
+                continue
+            existing = {c["name"] for c in insp.get_columns(table)}
+            for name, ddl in cols:
+                if name not in existing:
+                    conn.exec_driver_sql(
+                        f"ALTER TABLE {table} ADD COLUMN {name} {ddl}"
+                    )
 
 
 # Columns added after the first release. SQLite supports ADD COLUMN, so we patch

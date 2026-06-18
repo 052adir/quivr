@@ -22,7 +22,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy import select, text
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from . import (
@@ -664,6 +664,13 @@ _FLAG_MESSAGES = {
     "No_Stop_Loss": "פתחת {symbol} בלי stop-loss. שים סטופ עכשיו — הפסד אחד בלי סטופ מוחק כמה רווחים.",
     "Revenge_Trade": "פתחת {symbol} זמן קצר אחרי הפסד. ייתכן מסחר נקמה — קח הפסקה לפני העסקה הבאה.",
     "Averaging_Down": "הוספת פוזיציה ב-{symbol} באותו כיוון בזמן שכבר יש לך פוזיציה פתוחה — מיצוע הפסד מסוכן.",
+    "Risk_Overload": "החשיפה ב-{symbol} גבוהה מדי ביחס להון (מינוף אפקטיבי חריג). הקטן את הנפח.",
+    "Overtrading_Bleed": "פתחת יותר מדי עסקאות ב-24 השעות האחרונות. מסחר יתר שוחק את החשבון בעמלות והחלטות נמהרות.",
+    "Inverted_Time_Hold": "החזקת את העסקה המפסידה ב-{symbol} הרבה יותר זמן מהעסקאות המרוויחות שלך — אתה נותן להפסדים לרוץ וחותך רווחים מוקדם.",
+    "Stop_Loss_Dragging": "הזזת את ה-stop-loss ב-{symbol} לכיוון הפסד גדול יותר. זו הזזת סטופ — אל תיתן להפסד לגדול.",
+    "Negative_Risk_Reward": "הרווח הממוצע שלך קטן מחצי מההפסד הממוצע — תוחלת שלילית. גם אם תנצח לרוב, המתמטיקה נגדך.",
+    "Margin_Danger": "ה-Free Margin נמוך מ-20% מההון — החשבון קרוב ל-Margin Call. סגור/הקטן פוזיציות.",
+    "Weekend_Gap_Risk": "פתחת פוזיציה לקראת סגירת השבוע (שישי בערב). פער מחיר בפתיחת השבוע יכול לדלג מעל הסטופ.",
 }
 
 
@@ -714,6 +721,51 @@ def mt5_webhook(body: WebhookEventIn, request: Request, db: Session = Depends(ge
         if prior:
             flags.append("Averaging_Down")
 
+        # --- expanded quant-engine checks (on open) ---
+        # Risk_Overload: effective leverage = notional / equity.
+        if body.equity > 0 and body.notional > 0 and (body.notional / body.equity) > 30:
+            flags.append("Risk_Overload")
+
+        # Margin_Danger: free margin under 20% of equity (near a margin call).
+        if body.equity > 0 and 0 < body.free_margin < 0.20 * body.equity:
+            flags.append("Margin_Danger")
+
+        # Weekend_Gap_Risk: opened Friday after 18:00 (server UTC).
+        if now.weekday() == 4 and now.hour >= 18:
+            flags.append("Weekend_Gap_Risk")
+
+        # Overtrading_Bleed: >15 positions opened in the last 24h (closed + still-open).
+        since = now - timedelta(hours=24)
+        opened_24h = (
+            (db.scalar(
+                select(func.count(RoundTrip.id)).where(
+                    RoundTrip.user_id == user.id, RoundTrip.entry_time >= since
+                )
+            ) or 0)
+            + (db.scalar(
+                select(func.count(OpenPosition.id)).where(
+                    OpenPosition.user_id == user.id, OpenPosition.opened_at >= since
+                )
+            ) or 0)
+        )
+        if opened_24h > 15:
+            flags.append("Overtrading_Bleed")
+
+        # Negative_Risk_Reward: across the last 20 closed trades, avg win < 50% of avg loss.
+        recent = db.scalars(
+            select(RoundTrip)
+            .where(RoundTrip.user_id == user.id)
+            .order_by(RoundTrip.exit_time.desc())
+            .limit(20)
+        ).all()
+        wins = [r.pnl for r in recent if r.pnl > 0]
+        losses = [-r.pnl for r in recent if r.pnl < 0]
+        if wins and losses:
+            avg_win = sum(wins) / len(wins)
+            avg_loss = sum(losses) / len(losses)
+            if avg_loss > 0 and avg_win < 0.5 * avg_loss:
+                flags.append("Negative_Risk_Reward")
+
         # upsert this open position (by user + position_id)
         existing = db.scalar(
             select(OpenPosition).where(
@@ -726,11 +778,13 @@ def mt5_webhook(body: WebhookEventIn, request: Request, db: Session = Depends(ge
             existing.action = action
             existing.entry_price = body.price
             existing.volume = body.volume
+            existing.sl = body.sl
             existing.opened_at = now
         else:
             db.add(OpenPosition(
                 user_id=user.id, position_id=body.position_id, symbol=body.symbol,
-                action=action, entry_price=body.price, volume=body.volume, opened_at=now,
+                action=action, entry_price=body.price, volume=body.volume,
+                sl=body.sl, opened_at=now,
             ))
 
     elif entry == "out":  # a position was closed
@@ -757,8 +811,39 @@ def mt5_webhook(body: WebhookEventIn, request: Request, db: Session = Depends(ge
                 hold_seconds=max(0, int((now - entry_time).total_seconds())),
                 dedup_key=dedup[:80],
             ))
+        # Inverted_Time_Hold: a losing trade held far longer than your winners.
+        if body.profit < 0 and opened:
+            hold = (now - opened.opened_at).total_seconds()
+            avg_win_hold = db.scalar(
+                select(func.avg(RoundTrip.hold_seconds)).where(
+                    RoundTrip.user_id == user.id, RoundTrip.pnl > 0
+                )
+            )
+            if avg_win_hold and hold > 3 * float(avg_win_hold):
+                flags.append("Inverted_Time_Hold")
+
         if opened:
             db.delete(opened)
+
+    elif entry == "modify":  # SL/TP changed on an already-open position
+        opened = db.scalar(
+            select(OpenPosition).where(
+                OpenPosition.user_id == user.id,
+                OpenPosition.position_id == body.position_id,
+            )
+        )
+        if opened and opened.sl != 0.0:
+            old_sl, new_sl = opened.sl, body.sl
+            # "dragging" = the stop moved further from entry, enlarging the loss
+            # (or removed entirely).
+            dragged = (
+                (opened.action == "buy" and (new_sl == 0.0 or new_sl < old_sl))
+                or (opened.action == "sell" and (new_sl == 0.0 or new_sl > old_sl))
+            )
+            if dragged:
+                flags.append("Stop_Loss_Dragging")
+        if opened:
+            opened.sl = body.sl  # remember the new stop
 
     # store + push an alert for every flag raised
     for flag in flags:

@@ -96,3 +96,5 @@ class WebhookEventIn(BaseModel):
     profit: float = 0.0
     balance: float = 0.0
     equity: float = 0.0
+    free_margin: float = 0.0  # for Margin_Danger
+    notional: float = 0.0     # volume * contract size, for Risk_Overload

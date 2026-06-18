@@ -202,36 +202,15 @@
             <li>בפלטפורמת MT5, לחץ למעלה על <b>קובץ → פתח תיקיית נתונים → MQL5 → Experts</b> והדבק את הקובץ שם.</li>
             <li>גרור את הרובוט לגרף. בחלון שנפתח (Inputs) הזן את הטוקן האישי שלך, וודא שהתיבה <b>Allow WebRequest</b> מסומנת.</li>
           </ol>
-        </div>
-
-        <div class="panel">
-          <h3>הבוט ל-MetaTrader 5 (מחשב) 🛡️</h3>
-          <p class="note">
-            בוט שמותקן בתוך MT5 ומציג פאנל חי על הגרף + אזהרות אדומות מהבהבות
-            בזמן אמת (בלי stop-loss, סיכון גבוה, מסחר נקמה). קריאה בלבד — לא סוחר.
-          </p>
-          <ol class="note" style="line-height:2; margin: 8px 0; padding-inline-start: 18px">
-            <li>הורד את הבוט (כפתור למטה).</li>
-            <li>ב-MT5: <b>קובץ → פתח תיקיית נתונים</b> → היכנס ל-<code>MQL5\Experts</code> והעתק לשם את הקובץ.</li>
-            <li>ב-MT5, ב-Navigator (Ctrl+N) → גרור את <b>MentorGuard</b> על הגרף → אישור.</li>
-            <li>הפאנל יופיע בפינת הגרף. לקבלת התראות גם לטלגרם — חבר טלגרם למטה.</li>
-          </ol>
-          <button class="btn small" id="dl-watcher">הורד את הבוט (MentorGuard.ex5)</button>
-          <div class="note" id="dl-watcher-note" style="margin-top:8px"></div>
 
           <div id="ea-connect" style="margin-top:16px; padding-top:14px; border-top:1px solid rgba(255,255,255,0.08)">
-            <p class="note"><b>הגדרות לחיבור הבוט</b> — כשתגרור את MentorGuard על הגרף, בלשונית <b>Inputs</b> הזן את שני הערכים האלה (לחץ "העתק"):</p>
+            <p class="note"><b>הטוקן שלך</b> — העתק אותו והדבק בשדה InpToken בשלב 3:</p>
             <div class="field">
               <label>הטוקן שלך (InpToken)</label>
               <input id="ea-token" type="text" readonly value="" />
               <button class="btn small" id="copy-token" style="margin-top:6px">העתק טוקן</button>
             </div>
-            <div class="field">
-              <label>כתובת השרת (InpBackendUrl)</label>
-              <input id="ea-url" type="text" readonly value="" />
-              <button class="btn small" id="copy-url" style="margin-top:6px">העתק כתובת</button>
-            </div>
-            <p class="note" style="margin-top:10px">⚠️ צעד חובה ב-MT5: <b>Tools → Options → Expert Advisors</b> → סמן <b>"Allow WebRequest for listed URL"</b> → הוסף את הכתובת: <code id="ea-origin"></code></p>
+            <p class="note" style="margin-top:10px">⚠️ ב-MT5: <b>Tools → Options → Expert Advisors</b> → סמן <b>"Allow WebRequest for listed URL"</b> → הוסף את הכתובת: <code id="ea-origin"></code></p>
           </div>
         </div>
 

@@ -519,7 +519,8 @@ $("logout").addEventListener("click", logout);
 $("upgrade-btn").addEventListener("click", startCheckout);
 $("upgrade-logout").addEventListener("click", logout);
 $("tg-connect").addEventListener("click", connectTelegram);
-$("dl-watcher").addEventListener("click", downloadWatcher);
+const _dlWatcherBtn = $("dl-watcher");
+if (_dlWatcherBtn) _dlWatcherBtn.addEventListener("click", downloadWatcher);
 
 async function downloadWatcher() {
   const note = $("dl-watcher-note");

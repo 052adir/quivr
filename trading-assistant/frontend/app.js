@@ -467,7 +467,6 @@ function updateConnFields() {
   const p = $("conn-provider").value;
   $("grp-crypto").classList.toggle("hidden", !(p === "binance" || p === "ccxt"));
   $("grp-exchange").classList.toggle("hidden", p !== "ccxt");
-  $("grp-mt5").classList.toggle("hidden", p !== "mt5");
 }
 $("conn-provider").addEventListener("change", updateConnFields);
 updateConnFields();
@@ -483,16 +482,11 @@ $("conn-save").addEventListener("click", async () => {
     body.symbols = $("conn-symbols").value.trim();
     if (provider === "ccxt") body.exchange = $("conn-exchange").value.trim();
     if (!body.api_key) { err.textContent = "הזן API key"; return; }
-  } else if (provider === "mt5") {
-    body.login = $("conn-login").value.trim();
-    body.server = $("conn-server").value.trim();
-    body.password = $("conn-password").value.trim();
-    if (!body.password || !body.server) { err.textContent = "נדרשים Server וסיסמת משקיע"; return; }
   }
   try {
     const r = await api("/connections", { method: "POST", body });
     toast(`סונכרן! ${r.new_trades} עסקאות, ${r.new_alerts} התראות חדשות.`);
-    ["conn-key", "conn-secret", "conn-password"].forEach((id) => { if ($(id)) $(id).value = ""; });
+    ["conn-key", "conn-secret"].forEach((id) => { if ($(id)) $(id).value = ""; });
     await Promise.all([loadConnections(), loadDashboard()]);
   } catch (e) {
     err.textContent = e.message;

@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>פרגו — לוח מכוונים</title>
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <div class="wrap">
+
+    <!-- Header -->
+    <header class="topbar">
+      <div class="brand">
+        <div class="logo">פ</div>
+        <div>
+          <h1>פרגו — לוח מכוונים</h1>
+          <div class="sub">מסעדה חלבית יוקרתית · צור הדסה</div>
+        </div>
+      </div>
+      <div class="today">
+        <div class="period" id="period-badge" style="display:none"></div>
+        <div class="block"><div class="k">תאריך</div><div class="v" id="today-greg">—</div></div>
+        <div class="block"><div class="k">תאריך עברי</div><div class="v" id="today-heb">—</div></div>
+      </div>
+    </header>
+
+    <!-- Gauges -->
+    <section class="section">
+      <h2><span class="dot"></span> שעוני מחוונים</h2>
+      <div class="gauges">
+        <div class="gauge-card hero">
+          <h3>מחזור חודשי מול יעד</h3>
+          <div id="gauge-revenue"></div>
+        </div>
+        <div class="gauge-card">
+          <h3>קצב חודשי משוער</h3>
+          <div id="gauge-pace"></div>
+        </div>
+        <div class="gauge-card">
+          <h3>ממוצע הזמנה</h3>
+          <div id="gauge-order"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Warning lights -->
+    <section class="section">
+      <h2><span class="dot"></span> נורות התרעה</h2>
+      <div class="lights" id="lights"></div>
+    </section>
+
+    <!-- Two columns: events + tasks -->
+    <div class="cols">
+      <!-- Left: business calendar / upcoming event -->
+      <section class="section" style="margin-bottom:0">
+        <h2><span class="dot"></span> לוח שנה עסקי</h2>
+        <div class="panel">
+          <div class="phead"><h3>אירוע קרוב</h3><span class="badge">מבוסס לוח עברי + לועזי</span></div>
+          <div class="event-hero" id="event-hero"></div>
+          <div class="phead" style="border-top:1px solid var(--border)"><h3>בהמשך</h3></div>
+          <div class="pbody"><ul class="upcoming" id="upcoming-list"></ul></div>
+        </div>
+      </section>
+
+      <!-- Right: tasks + revenue entry -->
+      <div>
+        <section class="section" style="margin-bottom:20px">
+          <h2><span class="dot"></span> משימות ושיווק</h2>
+          <div class="panel">
+            <div class="phead"><h3>משימות צוות</h3><span class="badge" id="task-badge"></span></div>
+            <div class="pbody"><ul class="tasks" id="task-list"></ul></div>
+          </div>
+        </section>
+
+        <section class="section" style="margin-bottom:0">
+          <h2><span class="dot"></span> עדכון מחזור יומי</h2>
+          <div class="panel">
+            <div class="pbody" style="padding-top:16px">
+              <form id="rev-form" class="controls">
+                <input type="date" id="rev-date" />
+                <input type="number" id="rev-amount" placeholder="מחזור היום (₪)" step="0.01" style="flex:1;min-width:130px" />
+                <button type="submit" class="btn">שמור</button>
+              </form>
+              <div class="spark" id="spark"></div>
+              <div class="controls" style="margin-top:12px">
+                <button class="ghost" id="target-edit">✏️ ערוך יעד חודשי</button>
+                <button class="ghost" id="reset">↺ אפס נתונים</button>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <div class="footer-note">פרגו · לוח מכוונים לניהול העסק — גרסה 1 · הנתונים נשמרים במכשיר שלך</div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="js/seed-data.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

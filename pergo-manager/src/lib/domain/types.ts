@@ -128,7 +128,7 @@ export interface Shift {
 
 // מודול "ייבוא מסמכים"
 export type DocumentType =
-  | "z_daily" | "profit_loss" | "trial_balance"
+  | "employee_costing" | "z_daily" | "profit_loss" | "trial_balance"
   | "suppliers_ledger" | "raw_material_purchases" | "sales_report";
 export interface UploadedDocument {
   id: string;

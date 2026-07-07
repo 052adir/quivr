@@ -148,9 +148,10 @@
   .btn.ghost{background:var(--surface);color:var(--ink);border:1px solid var(--border)}
   .btn.sm{padding:6px 11px;font-size:.8rem}
   .btn svg{width:16px;height:16px;stroke:currentColor}
-  input,select{font-family:inherit;font-size:.92rem;background:var(--surface);border:1px solid var(--border);color:var(--ink);
+  input,select,textarea{font-family:inherit;font-size:.92rem;background:var(--surface);border:1px solid var(--border);color:var(--ink);
     border-radius:10px;padding:9px 11px;outline:none;width:100%}
-  input:focus,select:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+  input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+  .field{width:100%}
   .lbl{font-size:.74rem;color:var(--dim);font-weight:600;margin-bottom:5px;display:block}
   .fgrid{display:grid;gap:11px;grid-template-columns:repeat(auto-fit,minmax(140px,1fr))}
   .comp{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:14px}
@@ -826,30 +827,50 @@ function moveToMenu(status){captureFeas();if(!FEAS.name){toast('הזינו שם 
   S.menu.push({id:'mn'+Date.now(),name:FEAS.name,category:FEAS.category,price:r.price||null,cost:N(FEAS.food)||null,status,campaign:r.camp[0]||null});
   save();toast('הועבר לתפריט ('+status+')');go('menu');}
 
-/* ---------- ייבוא מסמכים (בקרוב) ---------- */
+/* ---------- ייבוא מסמכים ---------- */
+const DOC_TYPES=[['תמחיר עובדים','פעיל'],['Z יומי מהקופה','בקרוב'],['דוח רווח והפסד','בקרוב'],
+  ['מאזן בוחן','בקרוב'],['כרטסת ספקים','בקרוב'],['דוח קניות חומרי גלם','בקרוב'],['דוח מכירות תקופתי','בקרוב']];
+const ROLE_ALIASES={'טבח':'טבח','טבחית':'טבח','שף':'טבח','cook':'טבח','מלצר':'מלצרית','מלצרית':'מלצרית','מלצריות':'מלצרית','waitress':'מלצרית','מארח':'מארחת','מארחת':'מארחת','hostess':'מארחת','מנהל':'מנהל','manager':'מנהל','אחראי':'מנהל','אחראית':'מנהל'};
+let empImportRows=[];
+function parseEmpLine(line){const toks=line.replace(/[,;₪]/g,' ').split(/\s+/).map(s=>s.trim()).filter(Boolean);
+  let cost=null,role=null,name=[];toks.forEach(t=>{if(/^\d+(\.\d+)?$/.test(t)&&cost===null)cost=+t;else if(ROLE_ALIASES[t])role=ROLE_ALIASES[t];else name.push(t);});
+  name=name.join(' ');if(!name)return null;return {name,role,cost};}
+function parseEmpImport(){const el=document.getElementById('emp-import-txt');if(!el)return;
+  empImportRows=el.value.split(/\n/).map(l=>l.trim()).filter(Boolean).map(parseEmpLine).filter(Boolean);renderEmpPreview();}
+function renderEmpPreview(){const el=document.getElementById('emp-import-preview');if(!el)return;
+  if(!empImportRows.length){el.innerHTML='<div style="color:var(--mute);font-size:.85rem;padding:8px 0">הדביקו רשימה ולחצו "נתח מסמך" לתצוגה מקדימה.</div>';return;}
+  const existing=new Set(S.employees.map(e=>e.name));
+  el.innerHTML=`<div style="font-size:.78rem;color:var(--dim);font-weight:700;margin-bottom:8px">תצוגה מקדימה — ${empImportRows.length} עובדים זוהו</div>
+    <div class="card tscroll"><table><thead><tr><th>שם עובד</th><th>תפקיד</th><th>עלות שעתית</th><th>ייכנס ל</th><th>סטטוס</th></tr></thead><tbody>
+    ${empImportRows.map(r=>{const exists=existing.has(r.name),need=(!r.role||r.cost==null);
+      const st=need?'<span class="chip warn">דורש בדיקה</span>':exists?'<span class="chip acc">קיים · יעודכן</span>':'<span class="chip good">חדש</span>';
+      return `<tr><td style="font-weight:600">${r.name}</td><td>${r.role||'—'}</td><td class="tnum">${r.cost!=null?money(r.cost):'—'}</td><td style="color:var(--dim);font-size:.8rem">עובדים</td><td>${st}</td></tr>`;}).join('')}</tbody></table></div>
+    <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap"><button class="btn" onclick="confirmEmpImport()">${svg('check')} אשר קליטה (${empImportRows.length})</button>
+      <button class="btn ghost" onclick="empImportRows=[];renderEmpPreview()">נקה</button></div>`;}
+function confirmEmpImport(){if(!empImportRows.length)return;let add=0,upd=0;
+  empImportRows.forEach(r=>{const ex=S.employees.find(e=>e.name===r.name);
+    if(ex){if(r.role)ex.role=r.role;if(r.cost!=null)ex.hourly_cost=r.cost;upd++;}
+    else{S.employees.push({id:'em'+Date.now()+Math.floor(Math.random()*1e4),name:r.name,phone:null,role:r.role||'מלצרית',hourly_cost:r.cost,status:'פעיל',notes:r.role?null:'תפקיד לבדיקה'});add++;}});
+  empImportRows=[];save();toast(`נקלטו: ${add} חדשים · ${upd} עודכנו`);go('employees');}
+function loadEmpSample(){const el=document.getElementById('emp-import-txt');if(el){el.value='יוסי כהן, טבח, 52\nדנה לוי, מלצרית, 38\nמאיה, מלצרית, 38\nרות, מארחת, 40\nאבי, טבח, 55\nמרדכי, מנהל, 0';parseEmpImport();}}
 function screenDocs(){
-  const types=['Z יומי מהקופה','דוח רווח והפסד','מאזן בוחן','כרטסת ספקים','דוח קניות חומרי גלם','דוח מכירות תקופתי'];
-  return `<div class="card pad" style="max-width:740px">
+  return `<div class="card pad" style="max-width:780px;margin-bottom:16px">
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px">
       <div style="width:46px;height:46px;border-radius:12px;background:var(--accent-soft);color:var(--accent-ink);display:grid;place-items:center">${svg('file','ic22')}</div>
-      <div><div style="font-size:1.25rem;font-weight:800">ייבוא מסמכים</div><span class="chip acc" style="margin-top:4px">בקרוב · הארכיטקטורה מוכנה</span></div></div>
-    <p style="color:var(--dim);font-size:.9rem;margin:12px 0">העלאת מסמכים עסקיים, והמערכת מזהה וקולטת מהם נתונים למקומות הרלוונטיים — <b>רק לאחר אישור שלך</b>. בעת ההעלאה בוחרים תחילה את סוג המסמך (לא ניתן להעלות קובץ סתם).</p>
-    <div style="font-weight:700;font-size:.78rem;letter-spacing:.05em;text-transform:uppercase;color:var(--dim);margin:16px 0 9px">סוגי מסמכים בשלב ראשון</div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap">${types.map((t,i)=>`<span class="chip">${i+1}. ${t}</span>`).join('')}</div>
-    <div style="font-weight:700;font-size:.78rem;letter-spacing:.05em;text-transform:uppercase;color:var(--dim);margin:18px 0 9px">איך זה יעבוד</div>
-    <ol style="font-size:.9rem;color:var(--ink);padding-inline-start:18px;line-height:2;margin:0">
-      <li>בוחרים סוג מסמך, תאריך/טווח, ומעלים קובץ</li>
-      <li>לוחצים <b>נתח מסמך</b> — המערכת מזהה את הנתונים</li>
-      <li>מוצגת <b>טבלת תצוגה מקדימה</b>: נתון שנמצא · לאן ייכנס · ערך קיים · ערך חדש · סטטוס (תקין/דורש בדיקה)</li>
-      <li>רק בלחיצה על <b>אשר קליטה</b> הנתונים נכנסים למערכת</li>
-    </ol>
-    <div style="font-weight:700;font-size:.78rem;letter-spacing:.05em;text-transform:uppercase;color:var(--dim);margin:18px 0 9px">מסך נלווה — ניתוח הוצאות ויעדים</div>
-    <p style="font-size:.88rem;color:var(--dim);margin:0">טבלת סעיף · בפועל · % מהמחזור · יעד · פער · סטטוס · המלצה — כולל פוד קוסט/שכר/שכירות מול יעד, והמלצות AI לצמצום עלויות.</p>
-    <div class="banner warn" style="margin-top:18px">${svg('alert')}הנתונים לא מתעדכנים אוטומטית — כל שינוי דורש אישור. הקבצים יישמרו מאובטח (Supabase Storage), גלויים למורשים בלבד.</div>
-    <p style="font-size:.78rem;color:var(--mute);margin-top:12px">מודול זה דורש עיבוד קבצים בצד שרת (אחסון + זיהוי), ולכן ייבנה במערכת המלאה בענן. מבנה הנתונים —
-      <code style="font-size:.72rem">uploaded_documents</code>, <code style="font-size:.72rem">document_extracted_data</code>,
-      <code style="font-size:.72rem">expense_analysis</code>, <code style="font-size:.72rem">expense_recommendations</code> — כבר מוכן.</p>
-  </div>`;
+      <div><div style="font-size:1.25rem;font-weight:800">ייבוא מסמכים</div><span class="chip acc" style="margin-top:4px">קליטה מבוקרת · אישור לפני עדכון</span></div></div>
+    <p style="color:var(--dim);font-size:.9rem;margin:12px 0">בוחרים סוג מסמך, המערכת מזהה נתונים ומציגה תצוגה מקדימה — הנתונים נכנסים <b>רק אחרי אישור</b>.</p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">${DOC_TYPES.map(([t,st])=>`<span class="chip ${st==='פעיל'?'good':''}">${t}${st==='פעיל'?' ✓':' · בקרוב'}</span>`).join('')}</div>
+  </div>
+  <div class="card pad" style="max-width:780px;margin-bottom:16px">
+    <div style="font-weight:800;font-size:1.05rem;margin-bottom:2px">📋 ייבוא תמחיר עובדים <span class="chip good" style="vertical-align:middle">פעיל</span></div>
+    <p style="color:var(--dim);font-size:.88rem;margin:8px 0 12px">הדביקו את רשימת העובדים מגיליון התמחיר — שורה לכל עובד: <b>שם · תפקיד · עלות שעתית</b>. המערכת תזהה שמות, תפקידים ועלויות, ותקלוט אותם לרשימת העובדים. מה שחסר — נשלים ידנית.</p>
+    <textarea id="emp-import-txt" rows="6" class="field" style="resize:vertical;line-height:1.7" placeholder="יוסי כהן, טבח, 52&#10;דנה לוי, מלצרית, 38&#10;רות, מארחת, 40"></textarea>
+    <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+      <button class="btn" onclick="parseEmpImport()">${svg('search')} נתח מסמך</button>
+      <button class="btn ghost" onclick="loadEmpSample()">טען דוגמה</button></div>
+    <div id="emp-import-preview" style="margin-top:14px"></div>
+  </div>
+  <div class="banner warn" style="max-width:780px">${svg('alert')}שאר סוגי המסמכים (Z יומי, רווח והפסד, מאזן, כרטסת, קניות, מכירות) דורשים עיבוד קבצים בצד שרת ואחסון מאובטח — ייבנו במערכת המלאה. מבנה הנתונים כבר מוכן.</div>`;
 }
 
 /* ---------- modals ---------- */
@@ -1023,6 +1044,7 @@ window.openCash=openCash;window.saveCash=saveCash;window.openLead=openLead;windo
 window.openEmp=openEmp;window.saveEmp=saveEmp;window.delEmp=delEmp;window.openShift=openShift;window.saveShift=saveShift;window.delShift=delShift;
 window.openShiftDrawer=openShiftDrawer;window.setViewer=setViewer;window.setViewerEmp=setViewerEmp;window.weekNav=weekNav;
 window.approveApp=approveApp;window.removeApp=removeApp;window.applyShift=applyShift;window.setReq=setReq;window.addRole=addRole;window.saveShiftNotes=saveShiftNotes;
+window.parseEmpImport=parseEmpImport;window.renderEmpPreview=renderEmpPreview;window.confirmEmpImport=confirmEmpImport;window.loadEmpSample=loadEmpSample;
 window.saveSettings=saveSettings;window.sendZ=sendZ;window.render=render;
 window.feasInput=feasInput;window.toggleSel=toggleSel;window.saveEval=saveEval;window.loadEval=loadEval;window.delEval=delEval;window.moveToMenu=moveToMenu;
 render();

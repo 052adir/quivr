@@ -7,7 +7,8 @@
 -- מסמכים שהועלו
 create table if not exists uploaded_documents (
   id            uuid primary key default gen_random_uuid(),
-  document_type text not null,   -- z_daily / profit_loss / trial_balance / suppliers_ledger / raw_material_purchases / sales_report
+  document_type text not null,   -- employee_costing / z_daily / profit_loss / trial_balance / suppliers_ledger / raw_material_purchases / sales_report
+                                 -- (employee_costing -> target_table='employees': שמות, תפקידים, עלות שעתית)
   file_name     text,
   file_path     text,            -- נתיב ב-Supabase Storage (bucket: documents)
   period_start  date,

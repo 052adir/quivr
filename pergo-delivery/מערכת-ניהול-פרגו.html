@@ -235,6 +235,7 @@ const IC = {
   check:'<path d="M20 6L9 17l-5-5"/>', plus:'<path d="M12 5v14M5 12h14"/>', x:'<path d="M18 6L6 18M6 6l12 12"/>',
   pencil:'<path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',
   target:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/>',
+  beaker:'<path d="M9 3h6M10 3v5l-5 9a2 2 0 0 0 2 3h10a2 2 0 0 0 2-3l-5-9V3"/><path d="M6.5 14h11"/>',
   users:'<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/>',
   mail:'<rect x="2" y="4" width="20" height="16" rx="2"/><path d="M2 7l10 6 10-6"/>',
   gear:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1V21a2 2 0 1 1-4 0v-.1A1.6 1.6 0 0 0 6.6 19.4a2 2 0 1 1-2.8-2.8l.1-.1A1.6 1.6 0 0 0 3 13.6H3a2 2 0 1 1 0-4h.1A1.6 1.6 0 0 0 4.6 6.6a2 2 0 1 1 2.8-2.8l.1.1A1.6 1.6 0 0 0 10 3V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 2.7 1.1l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8"/>'
@@ -254,7 +255,7 @@ function defaults(){ return {
     {id:'em1',name:'יוסי',role:'פיצייה',cost:42,employer:55,status:'פעיל'},
     {id:'em2',name:'דנה',role:'מלצר',cost:38,employer:50,status:'פעיל'}
   ],
-  shifts:[] }; }
+  shifts:[],evaluations:[],feasDraft:null }; }
 function load(){ const base=defaults(); try{const r=localStorage.getItem(LS); if(r) return {...base,...JSON.parse(r)};}catch(e){} return base; }
 let S=load();
 function save(){ try{localStorage.setItem(LS,JSON.stringify(S));}catch(e){} }
@@ -365,7 +366,7 @@ function bars(data,color,fmt){
 /* ---------- screens ---------- */
 const TABS=[['dash','דשבורד','dash'],['journal','יומן','journal'],['cashflow','תזרים','cash'],
   ['calendar','לוח שנה','calendar'],['tasks','משימות','tasks'],['leads','לקוחות','target'],
-  ['menu','תפריט','menu'],['reports','דוחות','reports'],['employees','עובדים','users'],
+  ['menu','תפריט','menu'],['feas','בדיקת מנה','beaker'],['reports','דוחות','reports'],['employees','עובדים','users'],
   ['zreport','דוח Z','mail'],['settings','הגדרות','gear']];
 let TAB='dash';
 
@@ -612,6 +613,110 @@ function saveSettings(){const g=id=>document.getElementById(id).value;
     food_cost_target:N(g('s_fc')),cash_deposit_alert:N(g('s_dep')),partners:g('s_partners').split(',').map(x=>x.trim()).filter(Boolean)};
   save();render();toast('ההגדרות נשמרו');}
 
+/* ---------- בדיקת מנה חדשה ---------- */
+const FEAS_DEF={name:'',category:'פיצה',desc:'',kind:'קבועה',
+  food:'',prepMin:'',laborHr:'45',packaging:'',other:'',
+  manualPrice:'',targetFc:(S.settings.food_cost_target||34),mult:'3',justify:'1500',
+  audience:[],timing:[],solves:[],
+  newIngredient:false,newEquip:false,training:false,prepAhead:false,complexity:'בינונית',wasteRisk:'נמוך',shelf:'',
+  pilot:false,pilotStart:'',pilotEnd:'',pilotSalesTarget:'',pilotGrossTarget:'',pilotActual:'',decision:'—'};
+let FEAS=Object.assign({},FEAS_DEF,S.feasDraft||{});
+const psychPrice=x=>{if(x<=0)return 0;let b=Math.ceil(x/10)*10-1;if(b<x)b+=10;return b;};
+function evalDish(f){
+  const labor=(N(f.prepMin)/60)*N(f.laborHr), total=N(f.food)+labor+N(f.packaging)+N(f.other);
+  const tFc=N(f.targetFc)||34, mult=N(f.mult)||3;
+  const minByFc=tFc>0?N(f.food)/(tFc/100):0;
+  const recommended=psychPrice(Math.max(minByFc,total*mult));
+  const price=N(f.manualPrice)>0?N(f.manualPrice):recommended;
+  const fcPct=price>0?N(f.food)/price*100:0, gross=price-N(f.food), grossPct=price>0?gross/price*100:0, net=price-total;
+  let sc=5;
+  if(fcPct<=tFc)sc+=2; else if(fcPct<=tFc+5)sc+=0; else sc-=2;
+  if(grossPct>=60)sc+=1; if(grossPct<40&&price>0)sc-=1; if(net<=0&&price>0)sc-=2;
+  if(f.newIngredient)sc-=1; if(f.newEquip)sc-=1; if(f.training)sc-=.5;
+  if(f.complexity==='גבוהה')sc-=1; if(f.complexity==='נמוכה')sc+=.5;
+  if(f.wasteRisk==='גבוה')sc-=1.5; else if(f.wasteRisk==='בינוני')sc-=.5;
+  if(f.prepAhead)sc+=.5;
+  sc+=Math.min(1.5,(f.solves||[]).length*.5)+Math.min(1,(f.timing||[]).length*.25);
+  sc=Math.max(1,Math.min(10,Math.round(sc)));
+  let color,verdict;
+  if(sc>=7&&net>0&&fcPct<=tFc+4){color='good';verdict='מומלץ להכניס';}
+  else if(sc>=4&&net>0){color='warn';verdict='להכניס רק לפיילוט';}
+  else{color='bad';verdict='לא מומלץ כרגע';}
+  const justify=N(f.justify)||1500, units=gross>0?Math.ceil(justify/gross):null;
+  const camp=(f.timing||[]).filter(t=>['שישי','מוצאי שבת','חגים / תקופות מיוחדות'].includes(t))
+    .concat((f.audience||[]).filter(a=>['בין המצרים','סעודה רביעית'].includes(a)));
+  return {labor,total,minByFc,recommended,price,fcPct,gross,grossPct,net,score:sc,color,verdict,units,justify,camp};
+}
+function evalText(f,r){
+  if(!f.name&&!N(f.food))return 'מלאו את פרטי המנה והעלויות לקבלת המלצה מבוססת נתונים.';
+  const p=[];const tFc=N(f.targetFc)||34;
+  if(r.color==='good')p.push(`המנה נראית כדאית, פוד קוסט צפוי ${Math.round(r.fcPct)}%.`);
+  else if(r.color==='warn')p.push(`המנה גבולית מבחינת רווחיות — מומלץ להתחיל בפיילוט.`);
+  else p.push(`המנה לא מספיק רווחית כרגע.`);
+  if(r.fcPct>tFc&&r.recommended>0)p.push(`מומלץ להעלות מחיר ל-${r.recommended} ₪ או להוזיל חומרי גלם.`);
+  if(f.wasteRisk==='גבוה')p.push(`סיכון בזבוז גבוה — מומלץ פיילוט קצר (14 יום).`);
+  if(f.newEquip)p.push(`דורשת ציוד חדש — לשקול עלות ההשקעה מול הביקוש.`);
+  if(r.camp.length)p.push(`מתאימה במיוחד ל: ${[...new Set(r.camp)].join(', ')}.`);
+  return p.join(' ');
+}
+function costStrip(){const r=evalDish(FEAS);
+  return `<div class="c"><small>עלות עבודה</small><b class="tnum">${money(r.labor)}</b></div>
+    <div class="c"><small>עלות כוללת</small><b class="tnum">${money(r.total)}</b></div>
+    <div class="c"><small>מחיר מינ׳ (פוד קוסט)</small><b class="tnum">${money(r.minByFc)}</b></div>
+    <div class="c"><small>מחיר מומלץ</small><b class="tnum">${money(r.recommended)}</b></div>`;}
+function feasCard(){const r=evalDish(FEAS);
+  return `<div class="card pad" style="border-inline-start:5px solid var(--${r.color})">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+      <div><div style="font-size:.72rem;color:var(--dim);font-weight:700;letter-spacing:.05em">כרטיס המלצה</div>
+        <div style="font-size:1.35rem;font-weight:800">${FEAS.name||'מנה חדשה'}</div>
+        <span class="chip ${r.color}" style="margin-top:5px">${r.verdict}</span></div>
+      <div style="text-align:center"><div style="font-size:.66rem;color:var(--mute)">ציון כדאיות</div>
+        <div style="font-size:2.1rem;font-weight:800;color:var(--${r.color});line-height:1">${r.score}<span style="font-size:.85rem;color:var(--mute)">/10</span></div></div></div>
+    <div class="comp" style="grid-template-columns:repeat(2,1fr);margin-top:12px">
+      <div class="c"><small>מחיר מומלץ</small><b class="tnum" style="color:var(--accent-ink)">${money(r.recommended)}</b></div>
+      <div class="c"><small>מחיר מינ׳ (לא לרדת)</small><b class="tnum">${money(r.minByFc)}</b></div>
+      <div class="c"><small>פוד קוסט צפוי</small><b class="tnum" style="color:var(--${r.fcPct<=(N(FEAS.targetFc)||34)?'good':'bad'})">${r.price>0?Math.round(r.fcPct)+'%':'—'}</b></div>
+      <div class="c"><small>רווח גולמי צפוי</small><b class="tnum">${money(r.gross)} · ${r.price>0?Math.round(r.grossPct)+'%':'—'}</b></div></div>
+    <div style="font-size:.87rem;background:var(--surface-2);border-radius:11px;padding:12px 14px;margin-top:12px">${evalText(FEAS,r)}</div>
+    <div style="font-size:.8rem;color:var(--dim);margin-top:9px">להצדקת המנה: למכור כ-<b>${r.units??'—'}</b> מנות בחודש (תרומה חודשית ${money(r.justify)}).</div>
+    <div style="display:flex;gap:8px;margin-top:13px;flex-wrap:wrap">
+      <button class="btn" onclick="saveEval()">${svg('check')} שמור בדיקה</button>
+      <button class="btn ghost" onclick="moveToMenu('בפיילוט')">${svg('beaker')} העבר לפיילוט</button>
+      <button class="btn ghost" onclick="moveToMenu('פעיל')">${svg('utensils')} הוסף לתפריט</button></div></div>`;}
+const fin=(k,l,t='number',ph='0')=>`<div><label class="lbl">${l}</label><input data-fk="${k}" type="${t}" value="${FEAS[k]??''}" placeholder="${t==='number'?ph:''}" oninput="feasInput()"></div>`;
+const fsel=(k,l,opts)=>`<div><label class="lbl">${l}</label><select data-fk="${k}" onchange="feasInput()">${opts.map(o=>`<option ${FEAS[k]===o?'selected':''}>${o}</option>`).join('')}</select></div>`;
+const fchk=(k,l)=>`<label style="display:flex;gap:7px;align-items:center;font-size:.86rem"><input data-fk="${k}" type="checkbox" ${FEAS[k]?'checked':''} onchange="feasInput()" style="width:auto"> ${l}</label>`;
+const chipGroup=(g,opts)=>opts.map(o=>`<span class="chip ${(FEAS[g]||[]).includes(o)?'acc':''}" style="cursor:pointer" onclick="toggleSel('${g}',&quot;${o}&quot;)">${o}</span>`).join(' ');
+function screenFeas(){
+  const AUD=['משפחות','זוגות','ילדים','דתיים','עסקים','סעודה רביעית','בין המצרים','יום שישי','אחר'];
+  const TIM=['בוקר','צהריים','ערב','שישי','מוצאי שבת','חגים / תקופות מיוחדות'];
+  const SOL=['יום חלש','חיזוק מוצאי שבת','חיזוק שישי','מענה למסעדות בשריות','הגדלת ממוצע הזמנה','הרחבת קהל יעד'];
+  const sec=(t,b)=>`<div class="card pad" style="margin-bottom:14px"><div style="font-size:.76rem;letter-spacing:.05em;color:var(--dim);font-weight:700;text-transform:uppercase;margin-bottom:12px">${t}</div>${b}</div>`;
+  return `<div id="feas-card" style="margin-bottom:16px">${feasCard()}</div>
+    ${sec('1 · פרטי המנה',`<div class="fgrid">${fin('name','שם המנה','text')}${fsel('category','קטגוריה',['פיצה','פסטה','דג','סלט','קינוח','שתייה','אחר'])}${fsel('kind','סוג',['קבועה','עונתית / קמפיין'])}</div><div style="margin-top:11px">${fin('desc','תיאור קצר','text')}</div>`)}
+    ${sec('2 · עלויות',`<div class="fgrid">${fin('food','עלות חומרי גלם (₪)')}${fin('prepMin','זמן הכנה (דק׳)')}${fin('laborHr','עלות שעת עבודה (₪)')}${fin('packaging','אריזה / חד״פ (₪)')}${fin('other','עלויות נוספות (₪)')}</div><div class="comp" id="feas-costs" style="margin-top:12px">${costStrip()}</div>`)}
+    ${sec('3 · תמחור ורווחיות',`<div class="fgrid">${fin('manualPrice','מחיר מכירה מוצע (₪)')}${fin('targetFc','יעד פוד קוסט (%)')}${fin('mult','מכפיל רווח')}${fin('justify','יעד תרומה חודשית (₪)')}</div>`)}
+    ${sec('4 · ביקוש וקהל יעד',`<div class="lbl">קהל יעד</div><div style="display:flex;gap:6px;flex-wrap:wrap">${chipGroup('audience',AUD)}</div>
+      <div class="lbl" style="margin-top:13px">מתי צפויה להימכר</div><div style="display:flex;gap:6px;flex-wrap:wrap">${chipGroup('timing',TIM)}</div>
+      <div class="lbl" style="margin-top:13px">איזו בעיה עסקית פותרת</div><div style="display:flex;gap:6px;flex-wrap:wrap">${chipGroup('solves',SOL)}</div>`)}
+    ${sec('5 · תפעול',`<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:12px">${fchk('newIngredient','חומר גלם חדש')}${fchk('newEquip','ציוד חדש')}${fchk('training','הכשרת עובדים')}${fchk('prepAhead','ניתן להכין מראש')}</div><div class="fgrid">${fsel('complexity','מורכבות הכנה',['נמוכה','בינונית','גבוהה'])}${fsel('wasteRisk','סיכון בזבוז חומרי גלם',['נמוך','בינוני','גבוה'])}${fin('shelf','כמה זמן נשמרת','text')}</div>`)}
+    ${sec('6 · פיילוט',`<div style="margin-bottom:12px">${fchk('pilot','המנה נכנסת לפיילוט')}</div><div class="fgrid">${fin('pilotStart','תחילת פיילוט','date')}${fin('pilotEnd','סיום פיילוט','date')}${fin('pilotSalesTarget','יעד מכירות בפיילוט')}${fin('pilotGrossTarget','יעד רווח גולמי (₪)')}${fin('pilotActual','תוצאה בפועל')}${fsel('decision','החלטה',['—','להכניס לתפריט','להמשיך פיילוט','להוריד'])}</div>`)}
+    ${(S.evaluations&&S.evaluations.length)?`<div class="sec"><h2>בדיקות שמורות</h2><div class="grid" style="gap:10px">${S.evaluations.map(e=>`<div class="card pad" style="display:flex;align-items:center;gap:12px;border-inline-start:4px solid var(--${e.color})">
+      <div style="flex:1;min-width:0"><b>${e.name||'ללא שם'}</b><div style="font-size:.76rem;color:var(--dim)">ציון ${e.score}/10 · ${e.verdict||''}${e.decision&&e.decision!=='—'?' · '+e.decision:''}</div></div>
+      <button class="chip acc" style="cursor:pointer" onclick="loadEval('${e.id}')">טען</button><button class="x" onclick="delEval('${e.id}')">${svg('x')}</button></div>`).join('')}</div></div>`:''}`;
+}
+function captureFeas(){document.querySelectorAll('[data-fk]').forEach(el=>{const k=el.getAttribute('data-fk');FEAS[k]=el.type==='checkbox'?el.checked:el.value;});}
+function feasInput(){captureFeas();S.feasDraft=FEAS;save();const a=document.getElementById('feas-card');if(a)a.innerHTML=feasCard();const b=document.getElementById('feas-costs');if(b)b.innerHTML=costStrip();}
+function toggleSel(g,v){captureFeas();FEAS[g]=FEAS[g]||[];const i=FEAS[g].indexOf(v);i>=0?FEAS[g].splice(i,1):FEAS[g].push(v);S.feasDraft=FEAS;save();render();}
+function saveEval(){captureFeas();if(!FEAS.name){toast('הזינו שם מנה');return;}const r=evalDish(FEAS);
+  S.evaluations.unshift({id:'ev'+Date.now(),name:FEAS.name,score:r.score,color:r.color,verdict:r.verdict,decision:FEAS.decision,data:JSON.parse(JSON.stringify(FEAS))});
+  S.feasDraft=FEAS;save();render();toast('הבדיקה נשמרה');}
+function loadEval(id){const e=S.evaluations.find(x=>x.id===id);if(!e)return;FEAS=Object.assign({},FEAS_DEF,e.data);S.feasDraft=FEAS;save();render();toast('נטען לעריכה');}
+function delEval(id){S.evaluations=S.evaluations.filter(x=>x.id!==id);save();render();}
+function moveToMenu(status){captureFeas();if(!FEAS.name){toast('הזינו שם מנה');return;}const r=evalDish(FEAS);
+  S.menu.push({id:'mn'+Date.now(),name:FEAS.name,category:FEAS.category,price:r.price||null,cost:N(FEAS.food)||null,status,campaign:r.camp[0]||null});
+  save();toast('הועבר לתפריט ('+status+')');go('menu');}
+
 /* ---------- modals ---------- */
 function modal(title,body,footer){
   document.getElementById('modal-root').innerHTML=`<div class="ov" onclick="if(event.target===this)closeModal()">
@@ -762,7 +867,7 @@ function render(){
   document.getElementById('tabbar').innerHTML=TABS.map(([id,lbl,ic])=>
     `<button class="tab ${TAB===id?'on':''}" onclick="go('${id}')">${svg(ic)}${lbl}</button>`).join('');
   const scr={dash:screenDash,journal:screenJournal,cashflow:screenCashflow,calendar:screenCalendar,tasks:screenTasks,
-    leads:screenLeads,menu:screenMenu,reports:screenReports,employees:screenEmployees,zreport:screenZreport,settings:screenSettings}[TAB];
+    leads:screenLeads,menu:screenMenu,feas:screenFeas,reports:screenReports,employees:screenEmployees,zreport:screenZreport,settings:screenSettings}[TAB];
   document.getElementById('main').innerHTML=scr();
 }
 let toastT;function toast(m){const el=document.getElementById('toast');el.textContent=m;el.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>el.classList.remove('show'),1800);}
@@ -773,5 +878,6 @@ window.closeModal=closeModal;window.resetAll=resetAll;
 window.openCash=openCash;window.saveCash=saveCash;window.openLead=openLead;window.saveLead=saveLead;window.delLead=delLead;
 window.openEmp=openEmp;window.saveEmp=saveEmp;window.delEmp=delEmp;window.openShift=openShift;window.saveShift=saveShift;window.delShift=delShift;
 window.saveSettings=saveSettings;window.sendZ=sendZ;window.render=render;
+window.feasInput=feasInput;window.toggleSel=toggleSel;window.saveEval=saveEval;window.loadEval=loadEval;window.delEval=delEval;window.moveToMenu=moveToMenu;
 render();
 </script>

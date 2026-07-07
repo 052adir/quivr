@@ -3,7 +3,7 @@
 // All screens derive their numbers from here (single source principle).
 // ============================================================================
 
-import type { CalendarDay, DailyEntry, Settings, Task } from "./types";
+import type { CalendarDay, DailyEntry, DishEvaluation, Settings, Task } from "./types";
 
 const num = (n: number | null | undefined) => (Number.isFinite(n as number) ? (n as number) : 0);
 const daysInMonth = (y: number, m0: number) => new Date(y, m0 + 1, 0).getDate();
@@ -265,4 +265,79 @@ export function warningLights(args: {
     lights.push({ level: "good", title: "הכל תקין", detail: "אין התראות פתוחות", icon: "check" });
 
   return lights;
+}
+
+// ============================================================================
+// מודול "בדיקת מנה חדשה" — מנוע הכדאיות (טהור, ניתן לבדיקה).
+// זהה ללוגיקה שרצה באפליקציה העצמאית; המסך המלא יתחבר לכאן.
+// ============================================================================
+export interface DishVerdict {
+  laborCost: number;
+  totalCost: number;
+  minByFoodCost: number;
+  recommendedPrice: number;
+  price: number;
+  foodCostPct: number;
+  grossProfit: number;
+  grossPct: number;
+  netOverTotal: number;
+  score: number; // 1..10
+  color: StatusLevel; // good=green, warn=yellow, bad=red
+  verdict: string;
+  unitsToJustify: number | null;
+  campaignFit: string[];
+}
+
+const roundPsych = (x: number) => {
+  if (x <= 0) return 0;
+  let b = Math.ceil(x / 10) * 10 - 1; // …49/59/69/79/89
+  if (b < x) b += 10;
+  return b;
+};
+
+export function evaluateDish(f: Partial<DishEvaluation>): DishVerdict {
+  const food = num(f.food_cost);
+  const labor = (num(f.prep_minutes) / 60) * num(f.hourly_labor_cost);
+  const total = food + labor + num(f.packaging_cost) + num(f.other_costs);
+  const tFc = num(f.target_food_cost) || 34;
+  const mult = num(f.profit_multiplier) || 3;
+  const minByFc = tFc > 0 ? food / (tFc / 100) : 0;
+  const recommended = roundPsych(Math.max(minByFc, total * mult));
+  const price = num(f.manual_price) > 0 ? num(f.manual_price) : recommended;
+  const fcPct = price > 0 ? (food / price) * 100 : 0;
+  const gross = price - food;
+  const grossPct = price > 0 ? (gross / price) * 100 : 0;
+  const net = price - total;
+
+  let s = 5;
+  if (fcPct <= tFc) s += 2; else if (fcPct > tFc + 5) s -= 2;
+  if (grossPct >= 60) s += 1;
+  if (grossPct < 40 && price > 0) s -= 1;
+  if (net <= 0 && price > 0) s -= 2;
+  if (f.new_ingredient) s -= 1;
+  if (f.new_equipment) s -= 1;
+  if (f.needs_training) s -= 0.5;
+  if (f.complexity === "גבוהה") s -= 1;
+  if (f.complexity === "נמוכה") s += 0.5;
+  if (f.waste_risk === "גבוה") s -= 1.5; else if (f.waste_risk === "בינוני") s -= 0.5;
+  if (f.can_prep_ahead) s += 0.5;
+  s += Math.min(1.5, (f.solves?.length ?? 0) * 0.5) + Math.min(1, (f.timing?.length ?? 0) * 0.25);
+  const score = Math.max(1, Math.min(10, Math.round(s)));
+
+  let color: StatusLevel, verdict: string;
+  if (score >= 7 && net > 0 && fcPct <= tFc + 4) { color = "good"; verdict = "מומלץ להכניס"; }
+  else if (score >= 4 && net > 0) { color = "warn"; verdict = "להכניס רק לפיילוט"; }
+  else { color = "bad"; verdict = "לא מומלץ כרגע"; }
+
+  const justify = num(f.justify_target) || 1500;
+  const campaignFit = [
+    ...(f.timing ?? []).filter((t) => ["שישי", "מוצאי שבת", "חגים / תקופות מיוחדות"].includes(t)),
+    ...(f.audience ?? []).filter((a) => ["בין המצרים", "סעודה רביעית"].includes(a)),
+  ];
+  return {
+    laborCost: labor, totalCost: total, minByFoodCost: minByFc, recommendedPrice: recommended,
+    price, foodCostPct: fcPct, grossProfit: gross, grossPct, netOverTotal: net,
+    score, color, verdict, unitsToJustify: gross > 0 ? Math.ceil(justify / gross) : null,
+    campaignFit: [...new Set(campaignFit)],
+  };
 }

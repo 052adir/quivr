@@ -125,3 +125,43 @@ export interface Shift {
   planned_hours: number | null;
   notes: string | null;
 }
+
+// מודול "בדיקת מנה חדשה"
+export interface DishEvaluation {
+  id: string;
+  name: string;
+  category: string | null;
+  description: string | null;
+  kind: string | null;
+  food_cost: number | null;
+  prep_minutes: number | null;
+  hourly_labor_cost: number | null;
+  packaging_cost: number | null;
+  other_costs: number | null;
+  manual_price: number | null;
+  target_food_cost: number | null;
+  profit_multiplier: number | null;
+  justify_target: number | null;
+  audience: string[] | null;
+  timing: string[] | null;
+  solves: string[] | null;
+  new_ingredient: boolean;
+  new_equipment: boolean;
+  needs_training: boolean;
+  can_prep_ahead: boolean;
+  complexity: string | null;
+  waste_risk: string | null;
+  shelf_life: string | null;
+  pilot: boolean;
+  pilot_start: string | null;
+  pilot_end: string | null;
+  pilot_sales_target: number | null;
+  pilot_gross_target: number | null;
+  pilot_actual: number | null;
+  decision: string | null;
+  menu_item_id: string | null;
+  // generated (read-only)
+  labor_cost: number | null;
+  total_cost: number | null;
+  min_price_by_fc: number | null;
+}

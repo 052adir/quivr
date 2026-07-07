@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { isSupabaseConfigured } from "@/lib/supabase/config";
 
 interface State<T> {
   data: T | null;
@@ -17,10 +16,9 @@ export function useData<T>(loader: () => Promise<T>, deps: unknown[] = []): Stat
   const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const configured = isSupabaseConfigured();
+  const configured = true; // local engine is always available; cloud is optional
 
   const run = useCallback(async () => {
-    if (!configured) { setLoading(false); return; }
     setLoading(true);
     setError(null);
     try {
@@ -31,7 +29,7 @@ export function useData<T>(loader: () => Promise<T>, deps: unknown[] = []): Stat
       setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [configured, ...deps]);
+  }, [...deps]);
 
   useEffect(() => { run(); }, [run]);
 

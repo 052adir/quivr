@@ -7,12 +7,14 @@ import { NAV, MOBILE_PRIMARY } from "@/config/nav";
 import { Icon } from "./Icon";
 import { hebrewDate, weekdayHe } from "@/lib/hebrew";
 import { gregDate, todayISO } from "@/lib/format";
+import { isSupabaseConfigured } from "@/lib/supabase/config";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const active = NAV.find((n) => pathname.startsWith(n.href));
   const today = todayISO();
+  const cloud = isSupabaseConfigured();
 
   const NavList = ({ onNavigate }: { onNavigate?: () => void }) => (
     <nav className="flex flex-col gap-1">
@@ -64,6 +66,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </button>
           <div className="md:hidden font-extrabold text-lg">פרגו</div>
           <h1 className="hidden md:block text-xl font-extrabold">{active?.label ?? "דשבורד"}</h1>
+          <span className="chip" style={{ background: cloud ? "var(--good-bg)" : "var(--surface-2)", color: cloud ? "var(--good)" : "var(--text-dim)", borderColor: "transparent" }}
+            title={cloud ? "מחובר ל-Supabase בענן" : "נתונים נשמרים במכשיר זה. ניתן לשדרג לענן בהגדרות."}>
+            {cloud ? "☁️ ענן" : "● מצב מקומי"}
+          </span>
           <div className="ms-auto text-end leading-tight">
             <div className="text-sm font-bold">{weekdayHe(today)} · {gregDate(today)}</div>
             <div className="text-xs" style={{ color: "var(--text-dim)" }}>{hebrewDate(today)}</div>

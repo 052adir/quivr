@@ -7,14 +7,16 @@
 // ============================================================================
 
 import { getSupabase } from "./supabase/client";
+import { localDb } from "./local/localDb";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   CalendarDay, CashFlowSnapshot, DailyEntry, Employee, Lead, MenuItem, Settings, Shift, Task,
 } from "./domain/types";
 
-function db() {
-  const s = getSupabase();
-  if (!s) throw new Error("Supabase not configured");
-  return s;
+// Use Supabase cloud when configured; otherwise fall back to the local engine
+// (localStorage) so the app works with zero setup.
+function db(): SupabaseClient {
+  return (getSupabase() ?? localDb) as SupabaseClient;
 }
 
 async function all<T>(table: string, orderCol = "date", asc = true): Promise<T[]> {

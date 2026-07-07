@@ -239,6 +239,7 @@ const IC = {
   target:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/>',
   beaker:'<path d="M9 3h6M10 3v5l-5 9a2 2 0 0 0 2 3h10a2 2 0 0 0 2-3l-5-9V3"/><path d="M6.5 14h11"/>',
   file:'<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/>',
+  bulb:'<path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.1V17h6v-.2c0-.8.4-1.6 1-2.1A7 7 0 0 0 12 2z"/>',
   users:'<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/>',
   mail:'<rect x="2" y="4" width="20" height="16" rx="2"/><path d="M2 7l10 6 10-6"/>',
   gear:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1V21a2 2 0 1 1-4 0v-.1A1.6 1.6 0 0 0 6.6 19.4a2 2 0 1 1-2.8-2.8l.1-.1A1.6 1.6 0 0 0 3 13.6H3a2 2 0 1 1 0-4h.1A1.6 1.6 0 0 0 4.6 6.6a2 2 0 1 1 2.8-2.8l.1.1A1.6 1.6 0 0 0 10 3V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 2.7 1.1l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8"/>'
@@ -255,7 +256,12 @@ function defaults(){ return {
     {id:'ld2',name:'בית ספר הראל',category:'בית ספר',contact:'המזכירה',role:null,phone:null,tasting:'סלמון',letter:false,stage:'אותר',notes:null}
   ],
   employees:seedEmployees(),shifts:seedShifts(),shiftApps:seedApps(),
-  evaluations:[],feasDraft:null,analyses:[],viewer:{mode:'manager',empId:null},weekOffset:0,_v:2 }; }
+  evaluations:[],feasDraft:null,analyses:[],empEvents:seedEmpEvents(),viewer:{mode:'manager',empId:null},weekOffset:0,_v:2 }; }
+function seedEmpEvents(){return [
+  {id:'ee1',empId:'em3',type:'איחור',severity:'בינונית',desc:'איחור של 20 דקות למשמרת ערב',date:'2026-06-28'},
+  {id:'ee2',empId:'em3',type:'תלונה',severity:'גבוהה',desc:'תלונת לקוח על שירות לא אדיב',date:'2026-07-02'},
+  {id:'ee3',empId:'em3',type:'איחור',severity:'נמוכה',desc:'איחור קל',date:'2026-07-05'},
+  {id:'ee4',empId:'em2',type:'שבח',severity:'נמוכה',desc:'הצילה משמרת עמוסה בשישי',date:'2026-07-03'}];}
 function seedEmployees(){return [
   {id:'em1',name:'יוסי כהן',phone:'050-1111111',role:'טבח',hourly_cost:52,status:'פעיל',notes:null},
   {id:'em2',name:'דנה לוי',phone:'050-2222222',role:'מלצרית',hourly_cost:38,status:'פעיל',notes:null},
@@ -385,11 +391,67 @@ function bars(data,color,fmt){
 }
 
 /* ---------- screens ---------- */
-const TABS=[['dash','דשבורד','dash'],['journal','יומן','journal'],['cashflow','תזרים','cash'],
+const TABS=[['advisor','היועץ העסקי','bulb'],['dash','דשבורד','dash'],['journal','יומן','journal'],['cashflow','תזרים','cash'],
   ['calendar','לוח שנה','calendar'],['tasks','משימות','tasks'],['leads','לקוחות','target'],
   ['menu','תפריט','menu'],['feas','בדיקת מנה','beaker'],['reports','דוחות','reports'],['employees','משמרות','users'],
   ['zreport','דוח Z','mail'],['docs','ייבוא מסמכים','file'],['settings','הגדרות','gear']];
-let TAB='dash';
+let TAB='advisor';
+
+/* ---------- היועץ העסקי (מנוע כללים) ---------- */
+function employeeAdvice(evts){
+  const c={};evts.forEach(e=>{c[e.type]=(c[e.type]||0)+1;});
+  const neg=(c['תלונה']||0)+(c['חוסר מקצועיות']||0),late=c['איחור']||0,cancel=c['ביטול משמרת']||0,praise=c['שבח']||0;
+  let action=null,level='warn';
+  if(neg>=2){action='שיחת בירור ושקילת שימוע';level='bad';}
+  else if(neg>=1&&late>=2){action='שיחת משוב ומעקב';level='bad';}
+  else if(late>=2||cancel>=2){action='שיחת משוב';level='warn';}
+  const summary=[neg&&`${neg} תלונות`,late&&`${late} איחורים`,cancel&&`${cancel} ביטולים`,praise&&`${praise} שבחים`].filter(Boolean).join(' · ');
+  return {action,level,summary};
+}
+function advisor(){
+  const m=metrics(),c=cashStat(),ts=taskSum(),ev=nextEvent(),ws=weekStats(weekDates(0)),tgt=N(S.settings.food_cost_target),byId=empById();
+  const P=(arr,level,icon,text,route)=>arr.push({level,icon,text,route});
+  const urgent=[],expenses=[],employees=[],opps=[],events=[];
+  if(m.pacePct<0.85)P(urgent,'bad','trend',`המחזור בקצב ${Math.round(m.pacePct*100)}% מהיעד — צריך דחיפת מכירות/קמפיין.`,['journal','month','מחזור החודש']);
+  if(ws.missRoles&&ws.missRoles['טבח'])P(urgent,'bad','users',`חסר טבח ל-${ws.missRoles['טבח']} משמרות השבוע — לאייש בדחיפות.`,['employees','week','חוסרי עובדים']);
+  if(ts.stuck)P(urgent,'bad','alert',`${ts.stuck} משימות תקועות ממתינות לטיפול.`,['tasks','תקוע','משימות תקועות']);
+  if(c.depWarn)P(urgent,'warn','cash',`${money(c.toDep)} מזומן טרם הופקד לבנק.`,['cashflow','deposit','מזומן להפקדה']);
+  if(c.diffAlert)P(urgent,'bad','alert','אי-התאמה בין אמצעי התשלום למחזור — לבדוק.',['journal','diff','הפרש אמצעי תשלום']);
+  S.analyses.forEach(a=>{if(a.type==='pl'&&a.rec)a.rec.forEach(r=>P(expenses,'warn','receipt',r,['docs',null,'ייבוא מסמכים']));
+    if(a.type==='purch'&&a.pct>tgt)P(expenses,'bad','receipt',`פוד קוסט ${a.pct}% מעל היעד (${tgt}%) לפי דוח הקניות.`);
+    if(a.type==='supp'&&a.rec)a.rec.forEach(r=>P(expenses,'warn','receipt',r));});
+  S.menu.forEach(mi=>{const p=N(mi.price),co=N(mi.cost),fc=p>0?Math.round(co/p*1000)/10:null;if(fc!=null&&fc>tgt&&mi.status==='פעיל')P(expenses,'bad','utensils',`מנה "${mi.name}" — פוד קוסט ${fc}% (מעל ${tgt}%), פחות רווחית.`,['menu','all','תפריט']);});
+  const groups={};S.empEvents.forEach(e=>{(groups[e.empId]=groups[e.empId]||[]).push(e);});
+  Object.entries(groups).forEach(([id,evts])=>{const adv=employeeAdvice(evts);if(adv.action){const nm=byId[id]?byId[id].name:'עובד';P(employees,adv.level,'users',`${nm}: ${adv.summary} — מומלץ ${adv.action}.`,['employees','week',nm]);}});
+  if(m.avgOrder&&m.avgOrder<N(S.settings.avg_order_target))P(opps,'warn','trend',`ממוצע הזמנה ${money(m.avgOrder)} מתחת ליעד (${money(S.settings.avg_order_target)}) — להציע תוספות/שדרוגים.`,['journal','month','ממוצע הזמנה']);
+  const idx=s=>STAGES.indexOf(s),followups=S.leads.filter(l=>idx(l.stage)>=idx('טעימה נשלחה')&&idx(l.stage)<idx('הזמנה ראשונה')).length;
+  if(followups)P(opps,'good','target',`${followups} לקוחות פוטנציאליים אחרי טעימה — לקדם לשיחת מעקב והזמנה.`,['leads','all','לקוחות פוטנציאליים']);
+  const byW={};S.journal.filter(e=>N(e.revenue)>0).forEach(e=>{const w=e.weekday||weekday(e.date);(byW[w]=byW[w]||[]).push(N(e.revenue));});
+  let weakDay=null,weakAvg=Infinity;Object.entries(byW).forEach(([w,arr])=>{const a=arr.reduce((s,x)=>s+x,0)/arr.length;if(a<weakAvg){weakAvg=a;weakDay=w;}});
+  if(weakDay&&Object.keys(byW).length>=2)P(opps,'good','trend',`יום ${weakDay} חלש יחסית (ממוצע ${money(weakAvg)}) — קמפיין ממוקד יכול לחזק אותו.`);
+  if(ev)P(events,ev.days<=7?'warn':'good','calendar',`${ev.active?'עכשיו':'בעוד '+ev.days+' ימים'}: ${ev.event}${ev.action?' — '+ev.action:''}${ev.owner?' (אחראי: '+ev.owner+')':''}`,['calendar','event','אירוע עסקי קרוב']);
+  upcomingEvents(30).slice(1,3).forEach(e=>P(events,'good','calendar',`בעוד ${e.days} ימים: ${e.event}${e.action?' — '+e.action:''}`,['calendar','event','לוח שנה']));
+  urgent.sort((a,b)=>(a.level==='bad'?0:1)-(b.level==='bad'?0:1));
+  return {urgent:urgent.slice(0,3),expenses,employees,opps,events};
+}
+function advItem(it){const col=it.level==='bad'?'var(--bad)':it.level==='good'?'var(--good)':'var(--warn)',bg=it.level==='bad'?'var(--bad-soft)':it.level==='good'?'var(--good-soft)':'var(--warn-soft)';
+  return `<div class="card" style="padding:12px 14px;display:flex;align-items:center;gap:12px;border-inline-start:4px solid ${col}${it.route?';cursor:pointer':''}" ${it.route?`onclick="drill('${it.route[0]}','${it.route[1]}','${it.route[2]}')"`:''}>
+    <div style="width:34px;height:34px;border-radius:9px;background:${bg};color:${col};display:grid;place-items:center;flex:0 0 auto">${svg(it.icon)}</div>
+    <div style="flex:1;min-width:0;font-size:.9rem;font-weight:500">${it.text}</div>${it.route?`<span style="color:${col};font-weight:800">›</span>`:''}</div>`;}
+function advSection(title,items,empty){return `<div class="sec"><h2>${title}</h2>${items.length?`<div class="grid" style="gap:9px">${items.map(advItem).join('')}</div>`:`<div class="card" style="padding:12px 14px;color:var(--mute);font-size:.86rem">${empty}</div>`}</div>`;}
+function screenAdvisor(){const a=advisor(),t=todayISO(),total=a.urgent.length+a.expenses.length+a.employees.length+a.opps.length;
+  return `<div class="card pad" style="max-width:860px;margin-bottom:18px;background:linear-gradient(135deg,var(--accent),var(--accent-ink));color:#fff;border:none">
+    <div style="display:flex;align-items:center;gap:12px">
+      <div style="width:44px;height:44px;border-radius:12px;background:rgba(255,255,255,.2);display:grid;place-items:center">${svg('bulb','ic22')}</div>
+      <div><div style="font-size:1.3rem;font-weight:800">בוקר טוב 👋</div><div style="font-size:.85rem;opacity:.9">${weekday(t)} · ${gregD(t)} · ${hebrew(t)}</div></div></div>
+    <div style="font-size:.92rem;margin-top:12px;opacity:.95">${total?`יש <b>${total}</b> דברים שכדאי לשים לב אליהם היום. הכי דחוף למטה.`:'הכל נראה תקין היום — אין התראות דחופות. 👍'}</div></div>
+  <div style="max-width:860px">
+  ${a.urgent.length?`<div class="sec"><h2>🔴 הכי דחוף עכשיו</h2><div class="grid" style="gap:9px">${a.urgent.map(advItem).join('')}</div></div>`:''}
+  ${advSection('💸 חריגות בהוצאות ומנות',a.expenses,'אין חריגות — נתחו דוח רווח והפסד/קניות ב"ייבוא מסמכים".')}
+  ${advSection('👥 עובדים לטיפול',a.employees,'אין עובדים הדורשים טיפול כרגע.')}
+  ${advSection('📈 הזדמנויות להגדלת מחזור',a.opps,'—')}
+  ${advSection('📅 לקראת אירועים וחגים',a.events,'אין אירוע מיוחד בקרוב.')}
+  <div class="foot">היועץ מבוסס-כללים על הנתונים שלך · כל המלצה לחיצה מובילה למקור · אינו מחליט במקומך</div></div>`;}
 
 function screenDash(){
   const m=metrics(),c=cashStat(),ev=nextEvent(),ts=taskSum(),L=lights();
@@ -1134,8 +1196,23 @@ function openEmp(id){const e=id?S.employees.find(x=>x.id===id):{status:'פעיל
       <div><label class="lbl">תפקיד</label><select id="e_role">${opt(ROLES_HE,e.role)}</select></div>
       <div><label class="lbl">סטטוס</label><select id="e_status">${opt(['פעיל','בהשהיה','סיים'],e.status)}</select></div>
       <div><label class="lbl">עלות שעתית (₪)</label><input type="number" id="e_cost" value="${e.hourly_cost??''}"></div></div>
-      <div><label class="lbl">הערות</label><input id="e_notes" value="${e.notes||''}"></div></div>`,
+      <div><label class="lbl">הערות</label><input id="e_notes" value="${e.notes||''}"></div>
+      ${id?empEventsBlock(id):''}</div>`,
    `<button class="btn" onclick="saveEmp('${id||''}')">${svg('check')} שמירה</button>${id?`<button class="btn ghost" style="color:var(--bad)" onclick="delEmp('${id}')">מחיקה</button>`:''}`);}
+function empEventsBlock(id){const evts=S.empEvents.filter(x=>x.empId===id).sort((a,b)=>a.date<b.date?1:-1);
+  const col=t=>t==='שבח'?'good':t==='תלונה'||t==='חוסר מקצועיות'?'bad':'warn';
+  return `<div style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px">
+    <div class="lbl">היסטוריית אירועים (${evts.length})</div>
+    <div id="emp-ev-list" style="display:flex;flex-direction:column;gap:6px;max-height:150px;overflow:auto">
+    ${evts.length?evts.map(x=>`<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:.82rem;background:var(--surface-2);border-radius:8px;padding:6px 9px">
+      <span><span class="chip ${col(x.type)}">${x.type}</span> ${x.desc||''}</span><span style="color:var(--mute);font-size:.72rem;white-space:nowrap">${gregS(x.date)}</span></div>`).join(''):'<div style="color:var(--mute);font-size:.82rem">אין אירועים</div>'}</div>
+    <div class="fgrid" style="margin-top:8px">
+      <select id="ev_type">${['תלונה','איחור','ביטול משמרת','חוסר מקצועיות','שבח','אירוע חריג'].map(o=>`<option>${o}</option>`).join('')}</select>
+      <select id="ev_sev">${['נמוכה','בינונית','גבוהה'].map(o=>`<option>${o}</option>`).join('')}</select></div>
+    <div style="display:flex;gap:6px;margin-top:6px"><input id="ev_desc" placeholder="תיאור קצר"><button class="btn ghost sm" style="white-space:nowrap" onclick="logEmpEvent('${id}')">${svg('plus')} רשום</button></div></div>`;}
+function logEmpEvent(id){const g=x=>document.getElementById(x).value;
+  S.empEvents.push({id:'ee'+Date.now(),empId:id,type:g('ev_type'),severity:g('ev_sev'),desc:g('ev_desc')||null,date:todayISO()});
+  save();openEmp(id);toast('האירוע נרשם');}
 function saveEmp(id){const g=x=>document.getElementById(x).value;if(!g('e_name'))return;
   const o={name:g('e_name'),phone:g('e_phone')||null,role:g('e_role'),status:g('e_status'),hourly_cost:g('e_cost')===''?null:N(g('e_cost')),notes:g('e_notes')||null};
   if(id){Object.assign(S.employees.find(x=>x.id===id),o);}else{o.id='em'+Date.now();S.employees.push(o);}save();closeModal();render();toast('נשמר');}
@@ -1180,7 +1257,7 @@ function render(){
     `<button class="navitem ${TAB===id?'on':''}" onclick="go('${id}')">${svg(ic)}<span>${lbl}</span></button>`).join('');
   document.getElementById('tabbar').innerHTML=TABS.map(([id,lbl,ic])=>
     `<button class="tab ${TAB===id?'on':''}" onclick="go('${id}')">${svg(ic)}${lbl}</button>`).join('');
-  const scr={dash:screenDash,journal:screenJournal,cashflow:screenCashflow,calendar:screenCalendar,tasks:screenTasks,
+  const scr={advisor:screenAdvisor,dash:screenDash,journal:screenJournal,cashflow:screenCashflow,calendar:screenCalendar,tasks:screenTasks,
     leads:screenLeads,menu:screenMenu,feas:screenFeas,reports:screenReports,employees:screenEmployees,zreport:screenZreport,docs:screenDocs,settings:screenSettings}[TAB];
   document.getElementById('main').innerHTML=drillBannerHTML()+scr();
 }
@@ -1190,7 +1267,7 @@ window.openTask=openTask;window.saveTask=saveTask;window.delTask=delTask;window.
 window.openDish=openDish;window.saveDish=saveDish;window.delDish=delDish;window.dishCalc=dishCalc;
 window.closeModal=closeModal;window.resetAll=resetAll;
 window.openCash=openCash;window.saveCash=saveCash;window.openLead=openLead;window.saveLead=saveLead;window.delLead=delLead;
-window.openEmp=openEmp;window.saveEmp=saveEmp;window.delEmp=delEmp;window.openShift=openShift;window.saveShift=saveShift;window.delShift=delShift;
+window.openEmp=openEmp;window.saveEmp=saveEmp;window.delEmp=delEmp;window.openShift=openShift;window.saveShift=saveShift;window.delShift=delShift;window.logEmpEvent=logEmpEvent;
 window.openShiftDrawer=openShiftDrawer;window.setViewer=setViewer;window.setViewerEmp=setViewerEmp;window.weekNav=weekNav;
 window.approveApp=approveApp;window.removeApp=removeApp;window.applyShift=applyShift;window.setReq=setReq;window.addRole=addRole;window.saveShiftNotes=saveShiftNotes;
 window.setDocType=setDocType;window.analyzeDoc=analyzeDoc;window.loadDocSample=loadDocSample;window.confirmDoc=confirmDoc;window.renderDocPreview=renderDocPreview;window.delAnalysis=delAnalysis;

@@ -58,3 +58,5 @@ backend/local_models/*
 
 ## scripts
 .migration_info
+# local delivery zip (downloadable, not tracked)
+pergo-delivery.zip

@@ -1,0 +1,777 @@
+<title>מערכת ניהול פרגו</title>
+<style>
+  :root{
+    --bg:#e9edf0; --surface:#ffffff; --surface-2:#f3f6f8; --border:#dbe2e7;
+    --ink:#16232c; --dim:#586873; --mute:#8f9ea8;
+    --accent:#0e7c8a; --accent-soft:#dcf0f2; --accent-ink:#0a5b66;
+    --good:#12915a; --good-soft:#e3f4ea; --warn:#c9760c; --warn-soft:#fbeed7;
+    --bad:#d0453f; --bad-soft:#fbe6e5;
+    --shadow:0 1px 2px rgba(16,35,44,.06); --shadow-lg:0 10px 34px rgba(16,35,44,.10);
+    --r:15px;
+    --font:system-ui,-apple-system,"Segoe UI","Noto Sans Hebrew","Arial Hebrew",Arial,sans-serif;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --bg:#0c1317; --surface:#141f27; --surface-2:#1b2831; --border:#25343d;
+      --ink:#e7eef2; --dim:#93a6b1; --mute:#5f717c;
+      --accent:#2fb4c5; --accent-soft:#0f2f37; --accent-ink:#7fd9e4;
+      --good:#3bb277; --good-soft:#10281e; --warn:#e0952f; --warn-soft:#2c2110;
+      --bad:#e26a63; --bad-soft:#2c1615;
+      --shadow:0 1px 2px rgba(0,0,0,.3); --shadow-lg:0 12px 36px rgba(0,0,0,.5);
+    }
+  }
+  :root[data-theme="light"]{
+    --bg:#e9edf0; --surface:#ffffff; --surface-2:#f3f6f8; --border:#dbe2e7;
+    --ink:#16232c; --dim:#586873; --mute:#8f9ea8;
+    --accent:#0e7c8a; --accent-soft:#dcf0f2; --accent-ink:#0a5b66;
+    --good:#12915a; --good-soft:#e3f4ea; --warn:#c9760c; --warn-soft:#fbeed7;
+    --bad:#d0453f; --bad-soft:#fbe6e5; --shadow:0 1px 2px rgba(16,35,44,.06); --shadow-lg:0 10px 34px rgba(16,35,44,.10);
+  }
+  :root[data-theme="dark"]{
+    --bg:#0c1317; --surface:#141f27; --surface-2:#1b2831; --border:#25343d;
+    --ink:#e7eef2; --dim:#93a6b1; --mute:#5f717c;
+    --accent:#2fb4c5; --accent-soft:#0f2f37; --accent-ink:#7fd9e4;
+    --good:#3bb277; --good-soft:#10281e; --warn:#e0952f; --warn-soft:#2c2110;
+    --bad:#e26a63; --bad-soft:#2c1615; --shadow:0 1px 2px rgba(0,0,0,.3); --shadow-lg:0 12px 36px rgba(0,0,0,.5);
+  }
+
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);-webkit-font-smoothing:antialiased;line-height:1.5}
+  #app{direction:rtl}
+  h1,h2,h3{margin:0;text-wrap:balance}
+  button{font-family:inherit}
+  .tnum{font-variant-numeric:tabular-nums}
+
+  /* layout */
+  .shell{display:grid;grid-template-columns:1fr;min-height:100dvh}
+  @media(min-width:900px){.shell{grid-template-columns:248px 1fr}}
+  .side{display:none}
+  @media(min-width:900px){
+    .side{display:flex;flex-direction:column;gap:6px;padding:18px 14px;border-inline-end:1px solid var(--border);
+      background:var(--surface);position:sticky;top:0;height:100dvh}
+  }
+  .brand{display:flex;align-items:center;gap:11px;padding:4px 6px 16px}
+  .logo{width:42px;height:42px;border-radius:12px;display:grid;place-items:center;font-weight:800;color:#fff;font-size:20px;
+    background:linear-gradient(140deg,var(--accent),var(--accent-ink));flex:0 0 auto}
+  .brand b{font-size:1.02rem;font-weight:800;display:block;letter-spacing:-.01em}
+  .brand span{font-size:.74rem;color:var(--dim)}
+  .navitem{display:flex;align-items:center;gap:11px;padding:10px 12px;border-radius:11px;color:var(--dim);
+    font-weight:600;font-size:.92rem;cursor:pointer;border:none;background:none;text-align:start;width:100%}
+  .navitem:hover{background:var(--surface-2);color:var(--ink)}
+  .navitem.on{background:var(--accent);color:#fff}
+  .navitem.on svg{stroke:#fff}
+  .navitem svg{width:19px;height:19px;stroke:var(--dim);flex:0 0 auto}
+  .navitem:hover svg{stroke:var(--ink)}
+
+  .main{min-width:0;display:flex;flex-direction:column}
+  .head{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:12px;padding:13px 16px;
+    background:color-mix(in srgb,var(--surface) 86%,transparent);backdrop-filter:blur(9px);border-bottom:1px solid var(--border)}
+  .head .mtitle{font-size:1.15rem;font-weight:800}
+  .head .mbrand{display:flex;align-items:center;gap:9px}
+  @media(min-width:900px){.head .mbrand{display:none}}
+  .mlogo{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;font-weight:800;color:#fff;font-size:15px;
+    background:linear-gradient(140deg,var(--accent),var(--accent-ink))}
+  .today{margin-inline-start:auto;text-align:end;line-height:1.25}
+  .today b{font-size:.82rem;font-weight:700}
+  .today span{display:block;font-size:.72rem;color:var(--dim)}
+  .modechip{font-size:.68rem;font-weight:700;padding:4px 9px;border-radius:99px;background:var(--surface-2);color:var(--dim);
+    border:1px solid var(--border);white-space:nowrap}
+
+  .wrap{padding:16px;max-width:1140px;width:100%;margin:0 auto;padding-bottom:96px}
+  @media(min-width:900px){.wrap{padding:22px 26px 40px}}
+
+  /* bottom nav (mobile) */
+  .tabbar{position:fixed;bottom:0;inset-inline:0;z-index:30;display:flex;overflow-x:auto;scrollbar-width:none;
+    background:var(--surface);border-top:1px solid var(--border);padding-bottom:env(safe-area-inset-bottom)}
+  .tabbar::-webkit-scrollbar{display:none}
+  @media(min-width:900px){.tabbar{display:none}}
+  .tab{display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 4px;border:none;background:none;
+    color:var(--mute);font-size:10px;font-weight:600;cursor:pointer;flex:0 0 auto;min-width:62px}
+  .tab svg{width:21px;height:21px;stroke:var(--mute)}
+  .tab.on{color:var(--accent)} .tab.on svg{stroke:var(--accent)}
+
+  /* cards & bits */
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shadow)}
+  .sec{margin-bottom:24px}
+  .sec>h2{font-size:.78rem;letter-spacing:.06em;color:var(--dim);font-weight:700;text-transform:uppercase;margin:0 2px 11px;
+    display:flex;align-items:center;gap:8px}
+  .sec>h2::before{content:"";width:14px;height:2px;background:var(--accent);border-radius:2px}
+  .grid{display:grid;gap:13px}
+  .lights{grid-template-columns:repeat(auto-fit,minmax(210px,1fr))}
+  .light{display:flex;align-items:center;gap:12px;padding:13px 14px;border-radius:13px;background:var(--surface);
+    border:1px solid var(--border);border-inline-start:4px solid var(--mute);box-shadow:var(--shadow)}
+  .light .ic{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;flex:0 0 auto}
+  .light .ic svg{width:19px;height:19px}
+  .light b{font-size:.9rem;display:block} .light small{font-size:.75rem;color:var(--dim)}
+  .lv-good{border-inline-start-color:var(--good)} .lv-good .ic{background:var(--good-soft);color:var(--good)} .lv-good .ic svg{stroke:var(--good)}
+  .lv-warn{border-inline-start-color:var(--warn)} .lv-warn .ic{background:var(--warn-soft);color:var(--warn)} .lv-warn .ic svg{stroke:var(--warn)}
+  .lv-bad{border-inline-start-color:var(--bad)} .lv-bad .ic{background:var(--bad-soft);color:var(--bad)} .lv-bad .ic svg{stroke:var(--bad)}
+
+  .gauges{grid-template-columns:repeat(auto-fit,minmax(270px,1fr))}
+  .gcard{padding:18px 16px 14px;display:flex;flex-direction:column;align-items:center}
+  .gcard h3{font-size:.82rem;color:var(--dim);font-weight:700;margin-bottom:2px}
+  .gbig{font-size:2rem;font-weight:800;margin-top:-14px;letter-spacing:-.02em}
+  .gmeta{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-top:12px;width:100%}
+  .gmeta .m{background:var(--surface-2);border-radius:10px;padding:7px 4px;text-align:center}
+  .gmeta .m small{font-size:.66rem;color:var(--mute);display:block}
+  .gmeta .m b{font-size:.86rem}
+
+  .kpis{grid-template-columns:repeat(auto-fit,minmax(148px,1fr))}
+  .kpi{padding:14px}
+  .kpi small{font-size:.72rem;color:var(--dim);font-weight:600;display:flex;justify-content:space-between;align-items:center}
+  .kpi small svg{width:15px;height:15px;stroke:var(--mute);opacity:.7}
+  .kpi b{font-size:1.5rem;font-weight:800;display:block;margin-top:3px;letter-spacing:-.02em}
+
+  .two{display:grid;gap:16px} @media(min-width:820px){.two{grid-template-columns:1.05fr 1fr}}
+  .pad{padding:18px}
+  .chip{display:inline-flex;align-items:center;gap:5px;font-size:.72rem;font-weight:700;padding:3px 9px;border-radius:99px;
+    background:var(--surface-2);color:var(--dim);border:1px solid var(--border)}
+  .chip.good{background:var(--good-soft);color:var(--good);border-color:transparent}
+  .chip.warn{background:var(--warn-soft);color:var(--warn);border-color:transparent}
+  .chip.bad{background:var(--bad-soft);color:var(--bad);border-color:transparent}
+  .chip.acc{background:var(--accent-soft);color:var(--accent-ink);border-color:transparent}
+
+  .row{display:flex;align-items:center;gap:12px;padding:12px 0;border-top:1px solid var(--border)}
+  .row:first-child{border-top:none}
+  .cnt{width:52px;height:52px;border-radius:12px;background:var(--surface-2);display:grid;place-items:center;flex:0 0 auto;text-align:center}
+  .cnt b{font-size:1.1rem;font-weight:800;line-height:1;display:block} .cnt small{font-size:.6rem;color:var(--mute)}
+
+  table{width:100%;border-collapse:collapse;font-size:.86rem;white-space:nowrap}
+  .tscroll{overflow-x:auto}
+  th{text-align:start;font-size:.72rem;color:var(--dim);font-weight:600;padding:10px 11px;border-bottom:1px solid var(--border);text-transform:uppercase;letter-spacing:.03em}
+  td{padding:11px;border-bottom:1px solid var(--border)} tr:last-child td{border-bottom:none}
+  tbody tr{cursor:pointer} tbody tr:hover{background:var(--surface-2)}
+
+  .btn{display:inline-flex;align-items:center;gap:6px;background:var(--accent);color:#fff;border:none;border-radius:10px;
+    padding:9px 15px;font-weight:700;font-size:.9rem;cursor:pointer}
+  .btn:hover{filter:brightness(1.07)}
+  .btn.ghost{background:var(--surface);color:var(--ink);border:1px solid var(--border)}
+  .btn.sm{padding:6px 11px;font-size:.8rem}
+  .btn svg{width:16px;height:16px;stroke:currentColor}
+  input,select{font-family:inherit;font-size:.92rem;background:var(--surface);border:1px solid var(--border);color:var(--ink);
+    border-radius:10px;padding:9px 11px;outline:none;width:100%}
+  input:focus,select:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+  .lbl{font-size:.74rem;color:var(--dim);font-weight:600;margin-bottom:5px;display:block}
+  .fgrid{display:grid;gap:11px;grid-template-columns:repeat(auto-fit,minmax(140px,1fr))}
+  .comp{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:14px}
+  @media(min-width:560px){.comp{grid-template-columns:repeat(4,1fr)}}
+  .comp .c{background:var(--surface-2);border-radius:10px;padding:9px;text-align:center}
+  .comp .c small{font-size:.66rem;color:var(--mute);display:block} .comp .c b{font-size:.95rem}
+
+  .needle{transition:transform .9s cubic-bezier(.2,.9,.3,1.2)}
+  @media(prefers-reduced-motion:reduce){.needle{transition:none}}
+  .barcard{padding:16px}
+  .barcard h3{font-size:.82rem;font-weight:700;margin-bottom:10px}
+  .empty{padding:44px 16px;text-align:center;color:var(--mute)}
+  .empty b{display:block;color:var(--dim);font-size:.95rem}
+  .banner{display:flex;align-items:center;gap:11px;padding:12px 14px;border-radius:12px;margin-bottom:14px;font-size:.86rem;font-weight:600}
+  .banner svg{width:19px;height:19px;flex:0 0 auto}
+  .banner.warn{background:var(--warn-soft);color:var(--warn)} .banner.bad{background:var(--bad-soft);color:var(--bad)}
+  .foot{text-align:center;color:var(--mute);font-size:.74rem;margin-top:28px}
+
+  /* modal */
+  .ov{position:fixed;inset:0;z-index:50;display:flex;align-items:flex-end;justify-content:center;background:rgba(16,35,44,.45)}
+  @media(min-width:560px){.ov{align-items:center;padding:16px}}
+  .modal{background:var(--surface);border:1px solid var(--border);border-radius:18px 18px 0 0;width:100%;max-width:520px;
+    max-height:92dvh;overflow:auto;box-shadow:var(--shadow-lg)}
+  @media(min-width:560px){.modal{border-radius:18px}}
+  .mhead{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--surface)}
+  .mhead h3{font-size:1.05rem;font-weight:800}
+  .mbody{padding:18px}
+  .x{background:var(--surface-2);border:none;border-radius:9px;width:32px;height:32px;cursor:pointer;color:var(--dim);display:grid;place-items:center}
+  .x svg{width:17px;height:17px;stroke:var(--dim)}
+  .ico16{width:16px;height:16px;stroke:var(--mute);flex:0 0 auto}
+  .toast{position:fixed;bottom:80px;inset-inline:0;margin:auto;width:max-content;max-width:88%;background:var(--ink);color:var(--surface);
+    padding:10px 18px;border-radius:12px;font-weight:700;font-size:.86rem;z-index:60;opacity:0;transition:opacity .25s,transform .25s;transform:translateY(8px)}
+  .toast.show{opacity:1;transform:translateY(0)}
+</style>
+
+<div id="app">
+  <div class="shell">
+    <aside class="side">
+      <div class="brand">
+        <div class="logo">פ</div>
+        <div><b>מערכת ניהול פרגו</b><span>פיצה פרגו · צור הדסה</span></div>
+      </div>
+      <div id="sidenav"></div>
+      <div style="margin-top:auto;font-size:.72rem;color:var(--mute);padding:6px">גרסה 1 · הנתונים נשמרים במכשיר</div>
+    </aside>
+
+    <div class="main">
+      <header class="head">
+        <div class="mbrand"><div class="mlogo">פ</div><b style="font-size:1.02rem">פרגו</b></div>
+        <div class="mtitle" id="ptitle" style="display:none"></div>
+        <span class="modechip">● מצב מקומי</span>
+        <div class="today"><b id="tGreg"></b><span id="tHeb"></span></div>
+      </header>
+      <div class="wrap" id="main"></div>
+    </div>
+  </div>
+
+  <nav class="tabbar" id="tabbar"></nav>
+</div>
+
+<div id="modal-root"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+const SEED = {"settings": {"business": "פרגו", "location": "צור הדסה", "monthly_target": 210000, "avg_order_target": 90, "food_cost_target": 34, "cash_deposit_alert": 5000, "partners": ["מרדכי", "אנה"]}, "cash": {"bank_balance": 100000, "cash_in_register": 7000, "open_supplier_payments": 0}, "calendar": [{"date": "2026-07-02", "weekday": "חמישי", "hebrew": "י״ז תמוז תשפ״ו", "event": "בין המצרים", "importance": "גבוהה", "action": "דגש חלבי ודגים; לפרסם סלמון", "owner": "מרדכי"}, {"date": "2026-07-03", "weekday": "שישי", "hebrew": "י״ח תמוז תשפ״ו", "event": "בין המצרים", "importance": "גבוהה", "action": "דגש חלבי ודגים; לפרסם סלמון", "owner": "מרדכי"}, {"date": "2026-07-04", "weekday": "שבת", "hebrew": "י״ט תמוז תשפ״ו", "event": "בין המצרים", "importance": "גבוהה", "action": "דגש חלבי ודגים; לפרסם סלמון", "owner": "מרדכי"}, {"date": "2026-07-05", "weekday": "ראשון", "hebrew": "כ׳ תמוז תשפ״ו", "event": "בין המצרים", "importance": "גבוהה", "action": "דגש חלבי ודגים; לפרסם סלמון", "owner": "מרדכי"}, {"date": "2026-07-06", "weekday": "שני", "hebrew": "כ״א תמוז תשפ״ו", "event": "בין המצרים", "importance": "גבוהה", "action": "דגש חלבי ודגים; לפרסם סלמון", "owner": "מרדכי"}, {"date": "2026-07-07", "weekday": "שלישי", "hebrew": "כ״ב תמוז תשפ״ו", "event": "בין המצרים", "importance": "גבוהה", "action": "דגש חלבי ודגים; לפרסם סלמון", "owner": "מרדכי"}, {"date": "2026-07-08", "weekday": "רביעי", "hebrew": "כ״ג תמוז תשפ״ו", "event": "בין המצרים", "importance": "גבוהה", "action": "דגש חלבי ודגים; לפרסם סלמון", "owner": "מרדכי"}, {"date": "2026-07-09", "weekday": "חמישי", "hebrew": "כ״ד תמוז תשפ״ו", "event": "בין המצרים", "importance": "גבוהה", "action": "דגש חלבי ודגים; לפרסם סלמון", "owner": "מרדכי"}, {"date": "2026-07-10", "weekday": "שישי", "hebrew": "כ״ה תמוז תשפ״ו", "event": "בין המצרים", "importance": "גבוהה", "action": "דגש חלבי ודגים; לפרסם סלמון", "owner": "מרדכי"}, {"date": "2026-07-11", "weekday": "שבת", "hebrew": "כ״ו תמוז תשפ״ו", "event": "בין המצרים", "importance": "גבוהה", "action": "דגש חלבי ודגים; לפרסם סלמון", "owner": "מרדכי"}, {"date": "2026-07-12", "weekday": "ראשון", "hebrew": "כ״ז תמוז תשפ״ו", "event": "בין המצרים", "importance": "גבוהה", "action": "דגש חלבי ודגים; לפרסם סלמון", "owner": "מרדכי"}, {"date": "2026-07-13", "weekday": "שני", "hebrew": "כ״ח תמוז תשפ״ו", "event": "בין המצרים", "importance": "גבוהה", "action": "דגש חלבי ודגים; לפרסם סלמון", "owner": "מרדכי"}, {"date": "2026-07-14", "weekday": "שלישי", "hebrew": "כ״ט תמוז תשפ״ו", "event": "בין המצרים", "importance": "גבוהה", "action": "דגש חלבי ודגים; לפרסם סלמון", "owner": "מרדכי"}, {"date": "2026-07-15", "weekday": "רביעי", "hebrew": "א׳ אב תשפ״ו", "event": "תשעת הימים", "importance": "גבוהה", "action": "דגים, פסטות ומנות ללא בשר; קמפיין ממוקד", "owner": "אנה + מרדכי"}, {"date": "2026-07-16", "weekday": "חמישי", "hebrew": "ב׳ אב תשפ״ו", "event": "תשעת הימים", "importance": "גבוהה", "action": "דגים, פסטות ומנות ללא בשר; קמפיין ממוקד", "owner": "אנה + מרדכי"}, {"date": "2026-07-17", "weekday": "שישי", "hebrew": "ג׳ אב תשפ״ו", "event": "תשעת הימים", "importance": "גבוהה", "action": "דגים, פסטות ומנות ללא בשר; קמפיין ממוקד", "owner": "אנה + מרדכי"}, {"date": "2026-07-18", "weekday": "שבת", "hebrew": "ד׳ אב תשפ״ו", "event": "תשעת הימים", "importance": "גבוהה", "action": "דגים, פסטות ומנות ללא בשר; קמפיין ממוקד", "owner": "אנה + מרדכי"}, {"date": "2026-07-19", "weekday": "ראשון", "hebrew": "ה׳ אב תשפ״ו", "event": "תשעת הימים", "importance": "גבוהה", "action": "דגים, פסטות ומנות ללא בשר; קמפיין ממוקד", "owner": "אנה + מרדכי"}, {"date": "2026-07-20", "weekday": "שני", "hebrew": "ו׳ אב תשפ״ו", "event": "תשעת הימים", "importance": "גבוהה", "action": "דגים, פסטות ומנות ללא בשר; קמפיין ממוקד", "owner": "אנה + מרדכי"}, {"date": "2026-07-21", "weekday": "שלישי", "hebrew": "ז׳ אב תשפ״ו", "event": "תשעת הימים", "importance": "גבוהה", "action": "דגים, פסטות ומנות ללא בשר; קמפיין ממוקד", "owner": "אנה + מרדכי"}, {"date": "2026-07-22", "weekday": "רביעי", "hebrew": "ח׳ אב תשפ״ו", "event": "תשעת הימים", "importance": "גבוהה", "action": "דגים, פסטות ומנות ללא בשר; קמפיין ממוקד", "owner": "אנה + מרדכי"}, {"date": "2026-07-23", "weekday": "חמישי", "hebrew": "ט׳ אב תשפ״ו", "event": "תשעה באב", "importance": "מיוחד", "action": "בדיקת שעות פתיחה והיערכות למוצאי הצום", "owner": "אנה"}, {"date": "2026-07-24", "weekday": "שישי", "hebrew": "י׳ אב תשפ״ו", "event": "יום שישי", "importance": "בינונית", "action": "קמפיין שבת / קציצות דגים / סלטים", "owner": "אנה + מרדכי"}, {"date": "2026-07-25", "weekday": "שבת", "hebrew": "י״א אב תשפ״ו", "event": "מוצאי שבת", "importance": "בינונית", "action": "קמפיין סעודה רביעית / סלמון", "owner": "אנה + מרדכי"}, {"date": "2026-07-29", "weekday": "רביעי", "hebrew": "ט״ו אב תשפ״ו", "event": "ט״ו באב", "importance": "גבוהה", "action": "קמפיין זוגות / ערב חלבי בוטיק", "owner": "מרדכי"}, {"date": "2026-07-31", "weekday": "שישי", "hebrew": "י״ז אב תשפ״ו", "event": "יום שישי", "importance": "בינונית", "action": "קמפיין שבת / קציצות דגים / סלטים", "owner": "אנה + מרדכי"}, {"date": "2026-08-01", "weekday": "שבת", "hebrew": "י״ח אב תשפ״ו", "event": "מוצאי שבת", "importance": "בינונית", "action": "קמפיין סעודה רביעית / סלמון", "owner": "אנה + מרדכי"}, {"date": "2026-08-07", "weekday": "שישי", "hebrew": "כ״ד אב תשפ״ו", "event": "יום שישי", "importance": "בינונית", "action": "קמפיין שבת / קציצות דגים / סלטים", "owner": "אנה + מרדכי"}, {"date": "2026-08-08", "weekday": "שבת", "hebrew": "כ״ה אב תשפ״ו", "event": "מוצאי שבת", "importance": "בינונית", "action": "קמפיין סעודה רביעית / סלמון", "owner": "אנה + מרדכי"}, {"date": "2026-08-14", "weekday": "שישי", "hebrew": "א׳ אלול תשפ״ו", "event": "יום שישי", "importance": "בינונית", "action": "קמפיין שבת / קציצות דגים / סלטים", "owner": "אנה + מרדכי"}, {"date": "2026-08-15", "weekday": "שבת", "hebrew": "ב׳ אלול תשפ״ו", "event": "מוצאי שבת", "importance": "בינונית", "action": "קמפיין סעודה רביעית / סלמון", "owner": "אנה + מרדכי"}, {"date": "2026-08-21", "weekday": "שישי", "hebrew": "ח׳ אלול תשפ״ו", "event": "יום שישי", "importance": "בינונית", "action": "קמפיין שבת / קציצות דגים / סלטים", "owner": "אנה + מרדכי"}, {"date": "2026-08-22", "weekday": "שבת", "hebrew": "ט׳ אלול תשפ״ו", "event": "מוצאי שבת", "importance": "בינונית", "action": "קמפיין סעודה רביעית / סלמון", "owner": "אנה + מרדכי"}, {"date": "2026-08-28", "weekday": "שישי", "hebrew": "ט״ו אלול תשפ״ו", "event": "יום שישי", "importance": "בינונית", "action": "קמפיין שבת / קציצות דגים / סלטים", "owner": "אנה + מרדכי"}, {"date": "2026-08-29", "weekday": "שבת", "hebrew": "ט״ז אלול תשפ״ו", "event": "מוצאי שבת", "importance": "בינונית", "action": "קמפיין סעודה רביעית / סלמון", "owner": "אנה + מרדכי"}, {"date": "2026-09-04", "weekday": "שישי", "hebrew": "כ״ב אלול תשפ״ו", "event": "יום שישי", "importance": "בינונית", "action": "קמפיין שבת / קציצות דגים / סלטים", "owner": "אנה + מרדכי"}, {"date": "2026-09-05", "weekday": "שבת", "hebrew": "כ״ג אלול תשפ״ו", "event": "מוצאי שבת", "importance": "בינונית", "action": "קמפיין סעודה רביעית / סלמון", "owner": "אנה + מרדכי"}, {"date": "2026-09-11", "weekday": "שישי", "hebrew": "כ״ט אלול תשפ״ו", "event": "יום שישי", "importance": "בינונית", "action": "קמפיין שבת / קציצות דגים / סלטים", "owner": "אנה + מרדכי"}, {"date": "2026-09-12", "weekday": "שבת", "hebrew": "א׳ תשרי תשפ״ז", "event": "ראש השנה", "importance": "גבוהה", "action": "מגשי אירוח / הזמנות חג", "owner": "אנה + מרדכי"}, {"date": "2026-09-13", "weekday": "ראשון", "hebrew": "ב׳ תשרי תשפ״ז", "event": "ראש השנה", "importance": "גבוהה", "action": "מגשי אירוח / הזמנות חג", "owner": "אנה + מרדכי"}, {"date": "2026-09-18", "weekday": "שישי", "hebrew": "ז׳ תשרי תשפ״ז", "event": "יום שישי", "importance": "בינונית", "action": "קמפיין שבת / קציצות דגים / סלטים", "owner": "אנה + מרדכי"}, {"date": "2026-09-19", "weekday": "שבת", "hebrew": "ח׳ תשרי תשפ״ז", "event": "מוצאי שבת", "importance": "בינונית", "action": "קמפיין סעודה רביעית / סלמון", "owner": "אנה + מרדכי"}, {"date": "2026-09-21", "weekday": "שני", "hebrew": "י׳ תשרי תשפ״ז", "event": "יום כיפור", "importance": "מיוחד", "action": "בדיקת שעות פתיחה והיערכות לפני/אחרי הצום", "owner": "אנה"}, {"date": "2026-09-25", "weekday": "שישי", "hebrew": "י״ד תשרי תשפ״ז", "event": "יום שישי", "importance": "בינונית", "action": "קמפיין שבת / קציצות דגים / סלטים", "owner": "אנה + מרדכי"}, {"date": "2026-09-26", "weekday": "שבת", "hebrew": "ט״ו תשרי תשפ״ז", "event": "סוכות", "importance": "גבוהה", "action": "מנות משפחתיות / חופשת ילדים", "owner": "אנה + מרדכי"}, {"date": "2026-09-27", "weekday": "ראשון", "hebrew": "ט״ז תשרי תשפ״ז", "event": "סוכות", "importance": "גבוהה", "action": "מנות משפחתיות / חופשת ילדים", "owner": "אנה + מרדכי"}, {"date": "2026-09-28", "weekday": "שני", "hebrew": "י״ז תשרי תשפ״ז", "event": "סוכות", "importance": "גבוהה", "action": "מנות משפחתיות / חופשת ילדים", "owner": "אנה + מרדכי"}, {"date": "2026-09-29", "weekday": "שלישי", "hebrew": "י״ח תשרי תשפ״ז", "event": "סוכות", "importance": "גבוהה", "action": "מנות משפחתיות / חופשת ילדים", "owner": "אנה + מרדכי"}, {"date": "2026-09-30", "weekday": "רביעי", "hebrew": "י״ט תשרי תשפ״ז", "event": "סוכות", "importance": "גבוהה", "action": "מנות משפחתיות / חופשת ילדים", "owner": "אנה + מרדכי"}, {"date": "2026-10-01", "weekday": "חמישי", "hebrew": "כ׳ תשרי תשפ״ז", "event": "סוכות", "importance": "גבוהה", "action": "מנות משפחתיות / חופשת ילדים", "owner": "אנה + מרדכי"}, {"date": "2026-10-02", "weekday": "שישי", "hebrew": "כ״א תשרי תשפ״ז", "event": "סוכות", "importance": "גבוהה", "action": "מנות משפחתיות / חופשת ילדים", "owner": "אנה + מרדכי"}, {"date": "2026-10-03", "weekday": "שבת", "hebrew": "כ״ב תשרי תשפ״ז", "event": "מוצאי שבת", "importance": "בינונית", "action": "קמפיין סעודה רביעית / סלמון", "owner": "אנה + מרדכי"}, {"date": "2026-10-09", "weekday": "שישי", "hebrew": "כ״ח תשרי תשפ״ז", "event": "יום שישי", "importance": "בינונית", "action": "קמפיין שבת / קציצות דגים / סלטים", "owner": "אנה + מרדכי"}, {"date": "2026-10-10", "weekday": "שבת", "hebrew": "כ״ט תשרי תשפ״ז", "event": "מוצאי שבת", "importance": "בינונית", "action": "קמפיין סעודה רביעית / סלמון", "owner": "אנה + מרדכי"}, {"date": "2026-10-16", "weekday": "שישי", "hebrew": "ה׳ חשוון תשפ״ז", "event": "יום שישי", "importance": "בינונית", "action": "קמפיין שבת / קציצות דגים / סלטים", "owner": "אנה + מרדכי"}, {"date": "2026-10-17", "weekday": "שבת", "hebrew": "ו׳ חשוון תשפ״ז", "event": "מוצאי שבת", "importance": "בינונית", "action": "קמפיין סעודה רביעית / סלמון", "owner": "אנה + מרדכי"}, {"date": "2026-10-23", "weekday": "שישי", "hebrew": "י״ב חשוון תשפ״ז", "event": "יום שישי", "importance": "בינונית", "action": "קמפיין שבת / קציצות דגים / סלטים", "owner": "אנה + מרדכי"}, {"date": "2026-10-24", "weekday": "שבת", "hebrew": "י״ג חשוון תשפ״ז", "event": "מוצאי שבת", "importance": "בינונית", "action": "קמפיין סעודה רביעית / סלמון", "owner": "אנה + מרדכי"}, {"date": "2026-10-30", "weekday": "שישי", "hebrew": "י״ט חשוון תשפ״ז", "event": "יום שישי", "importance": "בינונית", "action": "קמפיין שבת / קציצות דגים / סלטים", "owner": "אנה + מרדכי"}, {"date": "2026-10-31", "weekday": "שבת", "hebrew": "כ׳ חשוון תשפ״ז", "event": "מוצאי שבת", "importance": "בינונית", "action": "קמפיין סעודה רביעית / סלמון", "owner": "אנה + מרדכי"}, {"date": "2026-11-06", "weekday": "שישי", "hebrew": "כ״ו חשוון תשפ״ז", "event": "יום שישי", "importance": "בינונית", "action": "קמפיין שבת / קציצות דגים / סלטים", "owner": "אנה + מרדכי"}, {"date": "2026-11-07", "weekday": "שבת", "hebrew": "כ״ז חשוון תשפ״ז", "event": "מוצאי שבת", "importance": "בינונית", "action": "קמפיין סעודה רביעית / סלמון", "owner": "אנה + מרדכי"}, {"date": "2026-11-13", "weekday": "שישי", "hebrew": "ג׳ כסלו תשפ״ז", "event": "יום שישי", "importance": "בינונית", "action": "קמפיין שבת / קציצות דגים / סלטים", "owner": "אנה + מרדכי"}, {"date": "2026-11-14", "weekday": "שבת", "hebrew": "ד׳ כסלו תשפ״ז", "event": "מוצאי שבת", "importance": "בינונית", "action": "קמפיין סעודה רביעית / סלמון", "owner": "אנה + מרדכי"}, {"date": "2026-11-20", "weekday": "שישי", "hebrew": "י׳ כסלו תשפ״ז", "event": "יום שישי", "importance": "בינונית", "action": "קמפיין שבת / קציצות דגים / סלטים", "owner": "אנה + מרדכי"}, {"date": "2026-11-21", "weekday": "שבת", "hebrew": "י״א כסלו תשפ״ז", "event": "מוצאי שבת", "importance": "בינונית", "action": "קמפיין סעודה רביעית / סלמון", "owner": "אנה + מרדכי"}, {"date": "2026-11-27", "weekday": "שישי", "hebrew": "י״ז כסלו תשפ״ז", "event": "יום שישי", "importance": "בינונית", "action": "קמפיין שבת / קציצות דגים / סלטים", "owner": "אנה + מרדכי"}, {"date": "2026-11-28", "weekday": "שבת", "hebrew": "י״ח כסלו תשפ״ז", "event": "מוצאי שבת", "importance": "בינונית", "action": "קמפיין סעודה רביעית / סלמון", "owner": "אנה + מרדכי"}, {"date": "2026-12-04", "weekday": "שישי", "hebrew": "כ״ד כסלו תשפ״ז", "event": "יום שישי", "importance": "בינונית", "action": "קמפיין שבת / קציצות דגים / סלטים", "owner": "אנה + מרדכי"}, {"date": "2026-12-05", "weekday": "שבת", "hebrew": "כ״ה כסלו תשפ״ז", "event": "חנוכה", "importance": "גבוהה", "action": "משפחות, ילדים, מבצעים ומנות חמות", "owner": "מרדכי"}, {"date": "2026-12-06", "weekday": "ראשון", "hebrew": "כ״ו כסלו תשפ״ז", "event": "חנוכה", "importance": "גבוהה", "action": "משפחות, ילדים, מבצעים ומנות חמות", "owner": "מרדכי"}, {"date": "2026-12-07", "weekday": "שני", "hebrew": "כ״ז כסלו תשפ״ז", "event": "חנוכה", "importance": "גבוהה", "action": "משפחות, ילדים, מבצעים ומנות חמות", "owner": "מרדכי"}, {"date": "2026-12-08", "weekday": "שלישי", "hebrew": "כ״ח כסלו תשפ״ז", "event": "חנוכה", "importance": "גבוהה", "action": "משפחות, ילדים, מבצעים ומנות חמות", "owner": "מרדכי"}, {"date": "2026-12-09", "weekday": "רביעי", "hebrew": "כ״ט כסלו תשפ״ז", "event": "חנוכה", "importance": "גבוהה", "action": "משפחות, ילדים, מבצעים ומנות חמות", "owner": "מרדכי"}, {"date": "2026-12-10", "weekday": "חמישי", "hebrew": "ל׳ כסלו תשפ״ז", "event": "חנוכה", "importance": "גבוהה", "action": "משפחות, ילדים, מבצעים ומנות חמות", "owner": "מרדכי"}, {"date": "2026-12-11", "weekday": "שישי", "hebrew": "א׳ טבת תשפ״ז", "event": "חנוכה", "importance": "גבוהה", "action": "משפחות, ילדים, מבצעים ומנות חמות", "owner": "מרדכי"}, {"date": "2026-12-12", "weekday": "שבת", "hebrew": "ב׳ טבת תשפ״ז", "event": "חנוכה", "importance": "גבוהה", "action": "משפחות, ילדים, מבצעים ומנות חמות", "owner": "מרדכי"}, {"date": "2026-12-18", "weekday": "שישי", "hebrew": "ח׳ טבת תשפ״ז", "event": "יום שישי", "importance": "בינונית", "action": "קמפיין שבת / קציצות דגים / סלטים", "owner": "אנה + מרדכי"}, {"date": "2026-12-19", "weekday": "שבת", "hebrew": "ט׳ טבת תשפ״ז", "event": "מוצאי שבת", "importance": "בינונית", "action": "קמפיין סעודה רביעית / סלמון", "owner": "אנה + מרדכי"}, {"date": "2026-12-25", "weekday": "שישי", "hebrew": "ט״ו טבת תשפ״ז", "event": "יום שישי", "importance": "בינונית", "action": "קמפיין שבת / קציצות דגים / סלטים", "owner": "אנה + מרדכי"}, {"date": "2026-12-26", "weekday": "שבת", "hebrew": "ט״ז טבת תשפ״ז", "event": "מוצאי שבת", "importance": "בינונית", "action": "קמפיין סעודה רביעית / סלמון", "owner": "אנה + מרדכי"}, {"date": "2027-01-01", "weekday": "שישי", "hebrew": "כ״ב טבת תשפ״ז", "event": "יום שישי", "importance": "בינונית", "action": "קמפיין שבת / קציצות דגים / סלטים", "owner": "אנה + מרדכי"}, {"date": "2027-01-02", "weekday": "שבת", "hebrew": "כ״ג טבת תשפ״ז", "event": "מוצאי שבת", "importance": "בינונית", "action": "קמפיין סעודה רביעית / סלמון", "owner": "אנה + מרדכי"}, {"date": "2027-01-08", "weekday": "שישי", "hebrew": "כ״ט טבת תשפ״ז", "event": "יום שישי", "importance": "בינונית", "action": "קמפיין שבת / קציצות דגים / סלטים", "owner": "אנה + מרדכי"}, {"date": "2027-01-09", "weekday": "שבת", "hebrew": "א׳ שבט תשפ״ז", "event": "מוצאי שבת", "importance": "בינונית", "action": "קמפיין סעודה רביעית / סלמון", "owner": "אנה + מרדכי"}, {"date": "2027-01-15", "weekday": "שישי", "hebrew": "ז׳ שבט תשפ״ז", "event": "יום שישי", "importance": "בינונית", "action": "קמפיין שבת / קציצות דגים / סלטים", "owner": "אנה + מרדכי"}, {"date": "2027-01-16", "weekday": "שבת", "hebrew": "ח׳ שבט תשפ״ז", "event": "מוצאי שבת", "importance": "בינונית", "action": "קמפיין סעודה רביעית / סלמון", "owner": "אנה + מרדכי"}, {"date": "2027-01-22", "weekday": "שישי", "hebrew": "י״ד שבט תשפ״ז", "event": "יום שישי", "importance": "בינונית", "action": "קמפיין שבת / קציצות דגים / סלטים", "owner": "אנה + מרדכי"}, {"date": "2027-01-23", "weekday": "שבת", "hebrew": "ט״ו שבט תשפ״ז", "event": "מוצאי שבת", "importance": "בינונית", "action": "קמפיין סעודה רביעית / סלמון", "owner": "אנה + מרדכי"}, {"date": "2027-01-29", "weekday": "שישי", "hebrew": "כ״א שבט תשפ״ז", "event": "יום שישי", "importance": "בינונית", "action": "קמפיין שבת / קציצות דגים / סלטים", "owner": "אנה + מרדכי"}, {"date": "2027-01-30", "weekday": "שבת", "hebrew": "כ״ב שבט תשפ״ז", "event": "מוצאי שבת", "importance": "בינונית", "action": "קמפיין סעודה רביעית / סלמון", "owner": "אנה + מרדכי"}, {"date": "2027-02-05", "weekday": "שישי", "hebrew": "כ״ח שבט תשפ״ז", "event": "יום שישי", "importance": "בינונית", "action": "קמפיין שבת / קציצות דגים / סלטים", "owner": "אנה + מרדכי"}, {"date": "2027-02-06", "weekday": "שבת", "hebrew": "כ״ט שבט תשפ״ז", "event": "מוצאי שבת", "importance": "בינונית", "action": "קמפיין סעודה רביעית / סלמון", "owner": "אנה + מרדכי"}, {"date": "2027-02-12", "weekday": "שישי", "hebrew": "ה׳ אדר תשפ״ז", "event": "יום שישי", "importance": "בינונית", "action": "קמפיין שבת / קציצות דגים / סלטים", "owner": "אנה + מרדכי"}, {"date": "2027-02-13", "weekday": "שבת", "hebrew": "ו׳ אדר תשפ״ז", "event": "מוצאי שבת", "importance": "בינונית", "action": "קמפיין סעודה רביעית / סלמון", "owner": "אנה + מרדכי"}, {"date": "2027-02-19", "weekday": "שישי", "hebrew": "י״ב אדר תשפ״ז", "event": "יום שישי", "importance": "בינונית", "action": "קמפיין שבת / קציצות דגים / סלטים", "owner": "אנה + מרדכי"}, {"date": "2027-02-20", "weekday": "שבת", "hebrew": "י״ג אדר תשפ״ז", "event": "מוצאי שבת", "importance": "בינונית", "action": "קמפיין סעודה רביעית / סלמון", "owner": "אנה + מרדכי"}, {"date": "2027-02-21", "weekday": "ראשון", "hebrew": "י״ד אדר תשפ״ז", "event": "פורים", "importance": "גבוהה", "action": "משלוחי מנות / מגשי אירוח", "owner": "אנה + מרדכי"}, {"date": "2027-02-22", "weekday": "שני", "hebrew": "ט״ו אדר תשפ״ז", "event": "פורים", "importance": "גבוהה", "action": "משלוחי מנות / מגשי אירוח", "owner": "אנה + מרדכי"}, {"date": "2027-02-26", "weekday": "שישי", "hebrew": "י״ט אדר תשפ״ז", "event": "יום שישי", "importance": "בינונית", "action": "קמפיין שבת / קציצות דגים / סלטים", "owner": "אנה + מרדכי"}, {"date": "2027-02-27", "weekday": "שבת", "hebrew": "כ׳ אדר תשפ״ז", "event": "מוצאי שבת", "importance": "בינונית", "action": "קמפיין סעודה רביעית / סלמון", "owner": "אנה + מרדכי"}, {"date": "2027-03-05", "weekday": "שישי", "hebrew": "כ״ו אדר תשפ״ז", "event": "יום שישי", "importance": "בינונית", "action": "קמפיין שבת / קציצות דגים / סלטים", "owner": "אנה + מרדכי"}, {"date": "2027-03-06", "weekday": "שבת", "hebrew": "כ״ז אדר תשפ״ז", "event": "מוצאי שבת", "importance": "בינונית", "action": "קמפיין סעודה רביעית / סלמון", "owner": "אנה + מרדכי"}, {"date": "2027-03-12", "weekday": "שישי", "hebrew": "ג׳ אדר ב׳ תשפ״ז", "event": "יום שישי", "importance": "בינונית", "action": "קמפיין שבת / קציצות דגים / סלטים", "owner": "אנה + מרדכי"}, {"date": "2027-03-13", "weekday": "שבת", "hebrew": "ד׳ אדר ב׳ תשפ״ז", "event": "מוצאי שבת", "importance": "בינונית", "action": "קמפיין סעודה רביעית / סלמון", "owner": "אנה + מרדכי"}, {"date": "2027-03-19", "weekday": "שישי", "hebrew": "י׳ אדר ב׳ תשפ״ז", "event": "יום שישי", "importance": "בינונית", "action": "קמפיין שבת / קציצות דגים / סלטים", "owner": "אנה + מרדכי"}, {"date": "2027-03-20", "weekday": "שבת", "hebrew": "י״א אדר ב׳ תשפ״ז", "event": "מוצאי שבת", "importance": "בינונית", "action": "קמפיין סעודה רביעית / סלמון", "owner": "אנה + מרדכי"}, {"date": "2027-03-23", "weekday": "שלישי", "hebrew": "י״ד אדר ב׳ תשפ״ז", "event": "פורים", "importance": "גבוהה", "action": "משלוחי מנות / מגשי אירוח", "owner": "אנה + מרדכי"}, {"date": "2027-03-24", "weekday": "רביעי", "hebrew": "ט״ו אדר ב׳ תשפ״ז", "event": "פורים", "importance": "גבוהה", "action": "משלוחי מנות / מגשי אירוח", "owner": "אנה + מרדכי"}, {"date": "2027-03-26", "weekday": "שישי", "hebrew": "י״ז אדר ב׳ תשפ״ז", "event": "יום שישי", "importance": "בינונית", "action": "קמפיין שבת / קציצות דגים / סלטים", "owner": "אנה + מרדכי"}, {"date": "2027-03-27", "weekday": "שבת", "hebrew": "י״ח אדר ב׳ תשפ״ז", "event": "מוצאי שבת", "importance": "בינונית", "action": "קמפיין סעודה רביעית / סלמון", "owner": "אנה + מרדכי"}, {"date": "2027-04-02", "weekday": "שישי", "hebrew": "כ״ד אדר ב׳ תשפ״ז", "event": "יום שישי", "importance": "בינונית", "action": "קמפיין שבת / קציצות דגים / סלטים", "owner": "אנה + מרדכי"}, {"date": "2027-04-03", "weekday": "שבת", "hebrew": "כ״ה אדר ב׳ תשפ״ז", "event": "מוצאי שבת", "importance": "בינונית", "action": "קמפיין סעודה רביעית / סלמון", "owner": "אנה + מרדכי"}, {"date": "2027-04-09", "weekday": "שישי", "hebrew": "ב׳ ניסן תשפ״ז", "event": "יום שישי", "importance": "בינונית", "action": "קמפיין שבת / קציצות דגים / סלטים", "owner": "אנה + מרדכי"}, {"date": "2027-04-10", "weekday": "שבת", "hebrew": "ג׳ ניסן תשפ״ז", "event": "מוצאי שבת", "importance": "בינונית", "action": "קמפיין סעודה רביעית / סלמון", "owner": "אנה + מרדכי"}, {"date": "2027-04-16", "weekday": "שישי", "hebrew": "ט׳ ניסן תשפ״ז", "event": "יום שישי", "importance": "בינונית", "action": "קמפיין שבת / קציצות דגים / סלטים", "owner": "אנה + מרדכי"}, {"date": "2027-04-17", "weekday": "שבת", "hebrew": "י׳ ניסן תשפ״ז", "event": "מוצאי שבת", "importance": "בינונית", "action": "קמפיין סעודה רביעית / סלמון", "owner": "אנה + מרדכי"}, {"date": "2027-04-21", "weekday": "רביעי", "hebrew": "י״ד ניסן תשפ״ז", "event": "פסח", "importance": "מיוחד", "action": "בדיקת פעילות / כשרות / תפריט חג", "owner": "אנה"}, {"date": "2027-04-22", "weekday": "חמישי", "hebrew": "ט״ו ניסן תשפ״ז", "event": "פסח", "importance": "מיוחד", "action": "בדיקת פעילות / כשרות / תפריט חג", "owner": "אנה"}, {"date": "2027-04-23", "weekday": "שישי", "hebrew": "ט״ז ניסן תשפ״ז", "event": "פסח", "importance": "מיוחד", "action": "בדיקת פעילות / כשרות / תפריט חג", "owner": "אנה"}, {"date": "2027-04-24", "weekday": "שבת", "hebrew": "י״ז ניסן תשפ״ז", "event": "פסח", "importance": "מיוחד", "action": "בדיקת פעילות / כשרות / תפריט חג", "owner": "אנה"}, {"date": "2027-04-25", "weekday": "ראשון", "hebrew": "י״ח ניסן תשפ״ז", "event": "פסח", "importance": "מיוחד", "action": "בדיקת פעילות / כשרות / תפריט חג", "owner": "אנה"}, {"date": "2027-04-26", "weekday": "שני", "hebrew": "י״ט ניסן תשפ״ז", "event": "פסח", "importance": "מיוחד", "action": "בדיקת פעילות / כשרות / תפריט חג", "owner": "אנה"}, {"date": "2027-04-27", "weekday": "שלישי", "hebrew": "כ׳ ניסן תשפ״ז", "event": "פסח", "importance": "מיוחד", "action": "בדיקת פעילות / כשרות / תפריט חג", "owner": "אנה"}, {"date": "2027-04-28", "weekday": "רביעי", "hebrew": "כ״א ניסן תשפ״ז", "event": "פסח", "importance": "מיוחד", "action": "בדיקת פעילות / כשרות / תפריט חג", "owner": "אנה"}, {"date": "2027-04-29", "weekday": "חמישי", "hebrew": "כ״ב ניסן תשפ״ז", "event": "פסח", "importance": "מיוחד", "action": "בדיקת פעילות / כשרות / תפריט חג", "owner": "אנה"}, {"date": "2027-04-30", "weekday": "שישי", "hebrew": "כ״ג ניסן תשפ״ז", "event": "יום שישי", "importance": "בינונית", "action": "קמפיין שבת / קציצות דגים / סלטים", "owner": "אנה + מרדכי"}, {"date": "2027-05-01", "weekday": "שבת", "hebrew": "כ״ד ניסן תשפ״ז", "event": "מוצאי שבת", "importance": "בינונית", "action": "קמפיין סעודה רביעית / סלמון", "owner": "אנה + מרדכי"}, {"date": "2027-05-07", "weekday": "שישי", "hebrew": "ל׳ ניסן תשפ״ז", "event": "יום שישי", "importance": "בינונית", "action": "קמפיין שבת / קציצות דגים / סלטים", "owner": "אנה + מרדכי"}, {"date": "2027-05-08", "weekday": "שבת", "hebrew": "א׳ אייר תשפ״ז", "event": "מוצאי שבת", "importance": "בינונית", "action": "קמפיין סעודה רביעית / סלמון", "owner": "אנה + מרדכי"}, {"date": "2027-05-14", "weekday": "שישי", "hebrew": "ז׳ אייר תשפ״ז", "event": "יום שישי", "importance": "בינונית", "action": "קמפיין שבת / קציצות דגים / סלטים", "owner": "אנה + מרדכי"}, {"date": "2027-05-15", "weekday": "שבת", "hebrew": "ח׳ אייר תשפ״ז", "event": "מוצאי שבת", "importance": "בינונית", "action": "קמפיין סעודה רביעית / סלמון", "owner": "אנה + מרדכי"}, {"date": "2027-05-21", "weekday": "שישי", "hebrew": "י״ד אייר תשפ״ז", "event": "יום שישי", "importance": "בינונית", "action": "קמפיין שבת / קציצות דגים / סלטים", "owner": "אנה + מרדכי"}, {"date": "2027-05-22", "weekday": "שבת", "hebrew": "ט״ו אייר תשפ״ז", "event": "מוצאי שבת", "importance": "בינונית", "action": "קמפיין סעודה רביעית / סלמון", "owner": "אנה + מרדכי"}, {"date": "2027-05-28", "weekday": "שישי", "hebrew": "כ״א אייר תשפ״ז", "event": "יום שישי", "importance": "בינונית", "action": "קמפיין שבת / קציצות דגים / סלטים", "owner": "אנה + מרדכי"}, {"date": "2027-05-29", "weekday": "שבת", "hebrew": "כ״ב אייר תשפ״ז", "event": "מוצאי שבת", "importance": "בינונית", "action": "קמפיין סעודה רביעית / סלמון", "owner": "אנה + מרדכי"}, {"date": "2027-06-04", "weekday": "שישי", "hebrew": "כ״ח אייר תשפ״ז", "event": "יום שישי", "importance": "בינונית", "action": "קמפיין שבת / קציצות דגים / סלטים", "owner": "אנה + מרדכי"}, {"date": "2027-06-05", "weekday": "שבת", "hebrew": "כ״ט אייר תשפ״ז", "event": "מוצאי שבת", "importance": "בינונית", "action": "קמפיין סעודה רביעית / סלמון", "owner": "אנה + מרדכי"}, {"date": "2027-06-10", "weekday": "חמישי", "hebrew": "ה׳ סיון תשפ״ז", "event": "שבועות", "importance": "גבוהה מאוד", "action": "קמפיין חלבי מרכזי; הזמנות מראש", "owner": "אנה + מרדכי"}, {"date": "2027-06-11", "weekday": "שישי", "hebrew": "ו׳ סיון תשפ״ז", "event": "שבועות", "importance": "גבוהה מאוד", "action": "קמפיין חלבי מרכזי; הזמנות מראש", "owner": "אנה + מרדכי"}, {"date": "2027-06-12", "weekday": "שבת", "hebrew": "ז׳ סיון תשפ״ז", "event": "שבועות", "importance": "גבוהה מאוד", "action": "קמפיין חלבי מרכזי; הזמנות מראש", "owner": "אנה + מרדכי"}, {"date": "2027-06-18", "weekday": "שישי", "hebrew": "י״ג סיון תשפ״ז", "event": "יום שישי", "importance": "בינונית", "action": "קמפיין שבת / קציצות דגים / סלטים", "owner": "אנה + מרדכי"}, {"date": "2027-06-19", "weekday": "שבת", "hebrew": "י״ד סיון תשפ״ז", "event": "מוצאי שבת", "importance": "בינונית", "action": "קמפיין סעודה רביעית / סלמון", "owner": "אנה + מרדכי"}, {"date": "2027-06-25", "weekday": "שישי", "hebrew": "כ׳ סיון תשפ״ז", "event": "יום שישי", "importance": "בינונית", "action": "קמפיין שבת / קציצות דגים / סלטים", "owner": "אנה + מרדכי"}, {"date": "2027-06-26", "weekday": "שבת", "hebrew": "כ״א סיון תשפ״ז", "event": "מוצאי שבת", "importance": "בינונית", "action": "קמפיין סעודה רביעית / סלמון", "owner": "אנה + מרדכי"}, {"date": "2027-07-02", "weekday": "שישי", "hebrew": "כ״ז סיון תשפ״ז", "event": "יום שישי", "importance": "בינונית", "action": "קמפיין שבת / קציצות דגים / סלטים", "owner": "אנה + מרדכי"}, {"date": "2027-07-03", "weekday": "שבת", "hebrew": "כ״ח סיון תשפ״ז", "event": "מוצאי שבת", "importance": "בינונית", "action": "קמפיין סעודה רביעית / סלמון", "owner": "אנה + מרדכי"}, {"date": "2027-07-09", "weekday": "שישי", "hebrew": "ד׳ תמוז תשפ״ז", "event": "יום שישי", "importance": "בינונית", "action": "קמפיין שבת / קציצות דגים / סלטים", "owner": "אנה + מרדכי"}, {"date": "2027-07-10", "weekday": "שבת", "hebrew": "ה׳ תמוז תשפ״ז", "event": "מוצאי שבת", "importance": "בינונית", "action": "קמפיין סעודה רביעית / סלמון", "owner": "אנה + מרדכי"}, {"date": "2027-07-16", "weekday": "שישי", "hebrew": "י״א תמוז תשפ״ז", "event": "יום שישי", "importance": "בינונית", "action": "קמפיין שבת / קציצות דגים / סלטים", "owner": "אנה + מרדכי"}, {"date": "2027-07-17", "weekday": "שבת", "hebrew": "י״ב תמוז תשפ״ז", "event": "מוצאי שבת", "importance": "בינונית", "action": "קמפיין סעודה רביעית / סלמון", "owner": "אנה + מרדכי"}, {"date": "2027-07-22", "weekday": "חמישי", "hebrew": "י״ז תמוז תשפ״ז", "event": "בין המצרים", "importance": "גבוהה", "action": "דגש חלבי ודגים; לפרסם סלמון", "owner": "מרדכי"}, {"date": "2027-07-23", "weekday": "שישי", "hebrew": "י״ח תמוז תשפ״ז", "event": "בין המצרים", "importance": "גבוהה", "action": "דגש חלבי ודגים; לפרסם סלמון", "owner": "מרדכי"}, {"date": "2027-07-24", "weekday": "שבת", "hebrew": "י״ט תמוז תשפ״ז", "event": "בין המצרים", "importance": "גבוהה", "action": "דגש חלבי ודגים; לפרסם סלמון", "owner": "מרדכי"}, {"date": "2027-07-25", "weekday": "ראשון", "hebrew": "כ׳ תמוז תשפ״ז", "event": "בין המצרים", "importance": "גבוהה", "action": "דגש חלבי ודגים; לפרסם סלמון", "owner": "מרדכי"}, {"date": "2027-07-26", "weekday": "שני", "hebrew": "כ״א תמוז תשפ״ז", "event": "בין המצרים", "importance": "גבוהה", "action": "דגש חלבי ודגים; לפרסם סלמון", "owner": "מרדכי"}, {"date": "2027-07-27", "weekday": "שלישי", "hebrew": "כ״ב תמוז תשפ״ז", "event": "בין המצרים", "importance": "גבוהה", "action": "דגש חלבי ודגים; לפרסם סלמון", "owner": "מרדכי"}, {"date": "2027-07-28", "weekday": "רביעי", "hebrew": "כ״ג תמוז תשפ״ז", "event": "בין המצרים", "importance": "גבוהה", "action": "דגש חלבי ודגים; לפרסם סלמון", "owner": "מרדכי"}, {"date": "2027-07-29", "weekday": "חמישי", "hebrew": "כ״ד תמוז תשפ״ז", "event": "בין המצרים", "importance": "גבוהה", "action": "דגש חלבי ודגים; לפרסם סלמון", "owner": "מרדכי"}, {"date": "2027-07-30", "weekday": "שישי", "hebrew": "כ״ה תמוז תשפ״ז", "event": "בין המצרים", "importance": "גבוהה", "action": "דגש חלבי ודגים; לפרסם סלמון", "owner": "מרדכי"}, {"date": "2027-07-31", "weekday": "שבת", "hebrew": "כ״ו תמוז תשפ״ז", "event": "בין המצרים", "importance": "גבוהה", "action": "דגש חלבי ודגים; לפרסם סלמון", "owner": "מרדכי"}, {"date": "2027-08-01", "weekday": "ראשון", "hebrew": "כ״ז תמוז תשפ״ז", "event": "בין המצרים", "importance": "גבוהה", "action": "דגש חלבי ודגים; לפרסם סלמון", "owner": "מרדכי"}, {"date": "2027-08-02", "weekday": "שני", "hebrew": "כ״ח תמוז תשפ״ז", "event": "בין המצרים", "importance": "גבוהה", "action": "דגש חלבי ודגים; לפרסם סלמון", "owner": "מרדכי"}, {"date": "2027-08-03", "weekday": "שלישי", "hebrew": "כ״ט תמוז תשפ״ז", "event": "בין המצרים", "importance": "גבוהה", "action": "דגש חלבי ודגים; לפרסם סלמון", "owner": "מרדכי"}, {"date": "2027-08-04", "weekday": "רביעי", "hebrew": "א׳ אב תשפ״ז", "event": "תשעת הימים", "importance": "גבוהה", "action": "דגים, פסטות ומנות ללא בשר; קמפיין ממוקד", "owner": "אנה + מרדכי"}, {"date": "2027-08-05", "weekday": "חמישי", "hebrew": "ב׳ אב תשפ״ז", "event": "תשעת הימים", "importance": "גבוהה", "action": "דגים, פסטות ומנות ללא בשר; קמפיין ממוקד", "owner": "אנה + מרדכי"}, {"date": "2027-08-06", "weekday": "שישי", "hebrew": "ג׳ אב תשפ״ז", "event": "תשעת הימים", "importance": "גבוהה", "action": "דגים, פסטות ומנות ללא בשר; קמפיין ממוקד", "owner": "אנה + מרדכי"}, {"date": "2027-08-07", "weekday": "שבת", "hebrew": "ד׳ אב תשפ״ז", "event": "תשעת הימים", "importance": "גבוהה", "action": "דגים, פסטות ומנות ללא בשר; קמפיין ממוקד", "owner": "אנה + מרדכי"}, {"date": "2027-08-08", "weekday": "ראשון", "hebrew": "ה׳ אב תשפ״ז", "event": "תשעת הימים", "importance": "גבוהה", "action": "דגים, פסטות ומנות ללא בשר; קמפיין ממוקד", "owner": "אנה + מרדכי"}, {"date": "2027-08-09", "weekday": "שני", "hebrew": "ו׳ אב תשפ״ז", "event": "תשעת הימים", "importance": "גבוהה", "action": "דגים, פסטות ומנות ללא בשר; קמפיין ממוקד", "owner": "אנה + מרדכי"}, {"date": "2027-08-10", "weekday": "שלישי", "hebrew": "ז׳ אב תשפ״ז", "event": "תשעת הימים", "importance": "גבוהה", "action": "דגים, פסטות ומנות ללא בשר; קמפיין ממוקד", "owner": "אנה + מרדכי"}, {"date": "2027-08-11", "weekday": "רביעי", "hebrew": "ח׳ אב תשפ״ז", "event": "תשעת הימים", "importance": "גבוהה", "action": "דגים, פסטות ומנות ללא בשר; קמפיין ממוקד", "owner": "אנה + מרדכי"}, {"date": "2027-08-12", "weekday": "חמישי", "hebrew": "ט׳ אב תשפ״ז", "event": "תשעה באב", "importance": "מיוחד", "action": "בדיקת שעות פתיחה והיערכות למוצאי הצום", "owner": "אנה"}, {"date": "2027-08-13", "weekday": "שישי", "hebrew": "י׳ אב תשפ״ז", "event": "יום שישי", "importance": "בינונית", "action": "קמפיין שבת / קציצות דגים / סלטים", "owner": "אנה + מרדכי"}, {"date": "2027-08-14", "weekday": "שבת", "hebrew": "י״א אב תשפ״ז", "event": "מוצאי שבת", "importance": "בינונית", "action": "קמפיין סעודה רביעית / סלמון", "owner": "אנה + מרדכי"}, {"date": "2027-08-18", "weekday": "רביעי", "hebrew": "ט״ו אב תשפ״ז", "event": "ט״ו באב", "importance": "גבוהה", "action": "קמפיין זוגות / ערב חלבי בוטיק", "owner": "מרדכי"}, {"date": "2027-08-20", "weekday": "שישי", "hebrew": "י״ז אב תשפ״ז", "event": "יום שישי", "importance": "בינונית", "action": "קמפיין שבת / קציצות דגים / סלטים", "owner": "אנה + מרדכי"}, {"date": "2027-08-21", "weekday": "שבת", "hebrew": "י״ח אב תשפ״ז", "event": "מוצאי שבת", "importance": "בינונית", "action": "קמפיין סעודה רביעית / סלמון", "owner": "אנה + מרדכי"}, {"date": "2027-08-27", "weekday": "שישי", "hebrew": "כ״ד אב תשפ״ז", "event": "יום שישי", "importance": "בינונית", "action": "קמפיין שבת / קציצות דגים / סלטים", "owner": "אנה + מרדכי"}, {"date": "2027-08-28", "weekday": "שבת", "hebrew": "כ״ה אב תשפ״ז", "event": "מוצאי שבת", "importance": "בינונית", "action": "קמפיין סעודה רביעית / סלמון", "owner": "אנה + מרדכי"}, {"date": "2027-09-03", "weekday": "שישי", "hebrew": "א׳ אלול תשפ״ז", "event": "יום שישי", "importance": "בינונית", "action": "קמפיין שבת / קציצות דגים / סלטים", "owner": "אנה + מרדכי"}, {"date": "2027-09-04", "weekday": "שבת", "hebrew": "ב׳ אלול תשפ״ז", "event": "מוצאי שבת", "importance": "בינונית", "action": "קמפיין סעודה רביעית / סלמון", "owner": "אנה + מרדכי"}, {"date": "2027-09-10", "weekday": "שישי", "hebrew": "ח׳ אלול תשפ״ז", "event": "יום שישי", "importance": "בינונית", "action": "קמפיין שבת / קציצות דגים / סלטים", "owner": "אנה + מרדכי"}, {"date": "2027-09-11", "weekday": "שבת", "hebrew": "ט׳ אלול תשפ״ז", "event": "מוצאי שבת", "importance": "בינונית", "action": "קמפיין סעודה רביעית / סלמון", "owner": "אנה + מרדכי"}, {"date": "2027-09-17", "weekday": "שישי", "hebrew": "ט״ו אלול תשפ״ז", "event": "יום שישי", "importance": "בינונית", "action": "קמפיין שבת / קציצות דגים / סלטים", "owner": "אנה + מרדכי"}, {"date": "2027-09-18", "weekday": "שבת", "hebrew": "ט״ז אלול תשפ״ז", "event": "מוצאי שבת", "importance": "בינונית", "action": "קמפיין סעודה רביעית / סלמון", "owner": "אנה + מרדכי"}, {"date": "2027-09-24", "weekday": "שישי", "hebrew": "כ״ב אלול תשפ״ז", "event": "יום שישי", "importance": "בינונית", "action": "קמפיין שבת / קציצות דגים / סלטים", "owner": "אנה + מרדכי"}, {"date": "2027-09-25", "weekday": "שבת", "hebrew": "כ״ג אלול תשפ״ז", "event": "מוצאי שבת", "importance": "בינונית", "action": "קמפיין סעודה רביעית / סלמון", "owner": "אנה + מרדכי"}, {"date": "2027-10-01", "weekday": "שישי", "hebrew": "כ״ט אלול תשפ״ז", "event": "יום שישי", "importance": "בינונית", "action": "קמפיין שבת / קציצות דגים / סלטים", "owner": "אנה + מרדכי"}, {"date": "2027-10-02", "weekday": "שבת", "hebrew": "א׳ תשרי תשפ״ח", "event": "ראש השנה", "importance": "גבוהה", "action": "מגשי אירוח / הזמנות חג", "owner": "אנה + מרדכי"}, {"date": "2027-10-03", "weekday": "ראשון", "hebrew": "ב׳ תשרי תשפ״ח", "event": "ראש השנה", "importance": "גבוהה", "action": "מגשי אירוח / הזמנות חג", "owner": "אנה + מרדכי"}, {"date": "2027-10-08", "weekday": "שישי", "hebrew": "ז׳ תשרי תשפ״ח", "event": "יום שישי", "importance": "בינונית", "action": "קמפיין שבת / קציצות דגים / סלטים", "owner": "אנה + מרדכי"}, {"date": "2027-10-09", "weekday": "שבת", "hebrew": "ח׳ תשרי תשפ״ח", "event": "מוצאי שבת", "importance": "בינונית", "action": "קמפיין סעודה רביעית / סלמון", "owner": "אנה + מרדכי"}, {"date": "2027-10-11", "weekday": "שני", "hebrew": "י׳ תשרי תשפ״ח", "event": "יום כיפור", "importance": "מיוחד", "action": "בדיקת שעות פתיחה והיערכות לפני/אחרי הצום", "owner": "אנה"}, {"date": "2027-10-15", "weekday": "שישי", "hebrew": "י״ד תשרי תשפ״ח", "event": "יום שישי", "importance": "בינונית", "action": "קמפיין שבת / קציצות דגים / סלטים", "owner": "אנה + מרדכי"}, {"date": "2027-10-16", "weekday": "שבת", "hebrew": "ט״ו תשרי תשפ״ח", "event": "סוכות", "importance": "גבוהה", "action": "מנות משפחתיות / חופשת ילדים", "owner": "אנה + מרדכי"}, {"date": "2027-10-17", "weekday": "ראשון", "hebrew": "ט״ז תשרי תשפ״ח", "event": "סוכות", "importance": "גבוהה", "action": "מנות משפחתיות / חופשת ילדים", "owner": "אנה + מרדכי"}, {"date": "2027-10-18", "weekday": "שני", "hebrew": "י״ז תשרי תשפ״ח", "event": "סוכות", "importance": "גבוהה", "action": "מנות משפחתיות / חופשת ילדים", "owner": "אנה + מרדכי"}, {"date": "2027-10-19", "weekday": "שלישי", "hebrew": "י״ח תשרי תשפ״ח", "event": "סוכות", "importance": "גבוהה", "action": "מנות משפחתיות / חופשת ילדים", "owner": "אנה + מרדכי"}, {"date": "2027-10-20", "weekday": "רביעי", "hebrew": "י״ט תשרי תשפ״ח", "event": "סוכות", "importance": "גבוהה", "action": "מנות משפחתיות / חופשת ילדים", "owner": "אנה + מרדכי"}, {"date": "2027-10-21", "weekday": "חמישי", "hebrew": "כ׳ תשרי תשפ״ח", "event": "סוכות", "importance": "גבוהה", "action": "מנות משפחתיות / חופשת ילדים", "owner": "אנה + מרדכי"}, {"date": "2027-10-22", "weekday": "שישי", "hebrew": "כ״א תשרי תשפ״ח", "event": "סוכות", "importance": "גבוהה", "action": "מנות משפחתיות / חופשת ילדים", "owner": "אנה + מרדכי"}, {"date": "2027-10-23", "weekday": "שבת", "hebrew": "כ״ב תשרי תשפ״ח", "event": "מוצאי שבת", "importance": "בינונית", "action": "קמפיין סעודה רביעית / סלמון", "owner": "אנה + מרדכי"}, {"date": "2027-10-29", "weekday": "שישי", "hebrew": "כ״ח תשרי תשפ״ח", "event": "יום שישי", "importance": "בינונית", "action": "קמפיין שבת / קציצות דגים / סלטים", "owner": "אנה + מרדכי"}, {"date": "2027-10-30", "weekday": "שבת", "hebrew": "כ״ט תשרי תשפ״ח", "event": "מוצאי שבת", "importance": "בינונית", "action": "קמפיין סעודה רביעית / סלמון", "owner": "אנה + מרדכי"}, {"date": "2027-11-05", "weekday": "שישי", "hebrew": "ה׳ חשוון תשפ״ח", "event": "יום שישי", "importance": "בינונית", "action": "קמפיין שבת / קציצות דגים / סלטים", "owner": "אנה + מרדכי"}, {"date": "2027-11-06", "weekday": "שבת", "hebrew": "ו׳ חשוון תשפ״ח", "event": "מוצאי שבת", "importance": "בינונית", "action": "קמפיין סעודה רביעית / סלמון", "owner": "אנה + מרדכי"}, {"date": "2027-11-12", "weekday": "שישי", "hebrew": "י״ב חשוון תשפ״ח", "event": "יום שישי", "importance": "בינונית", "action": "קמפיין שבת / קציצות דגים / סלטים", "owner": "אנה + מרדכי"}, {"date": "2027-11-13", "weekday": "שבת", "hebrew": "י״ג חשוון תשפ״ח", "event": "מוצאי שבת", "importance": "בינונית", "action": "קמפיין סעודה רביעית / סלמון", "owner": "אנה + מרדכי"}, {"date": "2027-11-19", "weekday": "שישי", "hebrew": "י״ט חשוון תשפ״ח", "event": "יום שישי", "importance": "בינונית", "action": "קמפיין שבת / קציצות דגים / סלטים", "owner": "אנה + מרדכי"}, {"date": "2027-11-20", "weekday": "שבת", "hebrew": "כ׳ חשוון תשפ״ח", "event": "מוצאי שבת", "importance": "בינונית", "action": "קמפיין סעודה רביעית / סלמון", "owner": "אנה + מרדכי"}, {"date": "2027-11-26", "weekday": "שישי", "hebrew": "כ״ו חשוון תשפ״ח", "event": "יום שישי", "importance": "בינונית", "action": "קמפיין שבת / קציצות דגים / סלטים", "owner": "אנה + מרדכי"}, {"date": "2027-11-27", "weekday": "שבת", "hebrew": "כ״ז חשוון תשפ״ח", "event": "מוצאי שבת", "importance": "בינונית", "action": "קמפיין סעודה רביעית / סלמון", "owner": "אנה + מרדכי"}, {"date": "2027-12-03", "weekday": "שישי", "hebrew": "ג׳ כסלו תשפ״ח", "event": "יום שישי", "importance": "בינונית", "action": "קמפיין שבת / קציצות דגים / סלטים", "owner": "אנה + מרדכי"}, {"date": "2027-12-04", "weekday": "שבת", "hebrew": "ד׳ כסלו תשפ״ח", "event": "מוצאי שבת", "importance": "בינונית", "action": "קמפיין סעודה רביעית / סלמון", "owner": "אנה + מרדכי"}, {"date": "2027-12-10", "weekday": "שישי", "hebrew": "י׳ כסלו תשפ״ח", "event": "יום שישי", "importance": "בינונית", "action": "קמפיין שבת / קציצות דגים / סלטים", "owner": "אנה + מרדכי"}, {"date": "2027-12-11", "weekday": "שבת", "hebrew": "י״א כסלו תשפ״ח", "event": "מוצאי שבת", "importance": "בינונית", "action": "קמפיין סעודה רביעית / סלמון", "owner": "אנה + מרדכי"}, {"date": "2027-12-17", "weekday": "שישי", "hebrew": "י״ז כסלו תשפ״ח", "event": "יום שישי", "importance": "בינונית", "action": "קמפיין שבת / קציצות דגים / סלטים", "owner": "אנה + מרדכי"}, {"date": "2027-12-18", "weekday": "שבת", "hebrew": "י״ח כסלו תשפ״ח", "event": "מוצאי שבת", "importance": "בינונית", "action": "קמפיין סעודה רביעית / סלמון", "owner": "אנה + מרדכי"}, {"date": "2027-12-24", "weekday": "שישי", "hebrew": "כ״ד כסלו תשפ״ח", "event": "יום שישי", "importance": "בינונית", "action": "קמפיין שבת / קציצות דגים / סלטים", "owner": "אנה + מרדכי"}, {"date": "2027-12-25", "weekday": "שבת", "hebrew": "כ״ה כסלו תשפ״ח", "event": "חנוכה", "importance": "גבוהה", "action": "משפחות, ילדים, מבצעים ומנות חמות", "owner": "מרדכי"}, {"date": "2027-12-26", "weekday": "ראשון", "hebrew": "כ״ו כסלו תשפ״ח", "event": "חנוכה", "importance": "גבוהה", "action": "משפחות, ילדים, מבצעים ומנות חמות", "owner": "מרדכי"}, {"date": "2027-12-27", "weekday": "שני", "hebrew": "כ״ז כסלו תשפ״ח", "event": "חנוכה", "importance": "גבוהה", "action": "משפחות, ילדים, מבצעים ומנות חמות", "owner": "מרדכי"}, {"date": "2027-12-28", "weekday": "שלישי", "hebrew": "כ״ח כסלו תשפ״ח", "event": "חנוכה", "importance": "גבוהה", "action": "משפחות, ילדים, מבצעים ומנות חמות", "owner": "מרדכי"}, {"date": "2027-12-29", "weekday": "רביעי", "hebrew": "כ״ט כסלו תשפ״ח", "event": "חנוכה", "importance": "גבוהה", "action": "משפחות, ילדים, מבצעים ומנות חמות", "owner": "מרדכי"}, {"date": "2027-12-30", "weekday": "חמישי", "hebrew": "ל׳ כסלו תשפ״ח", "event": "חנוכה", "importance": "גבוהה", "action": "משפחות, ילדים, מבצעים ומנות חמות", "owner": "מרדכי"}, {"date": "2027-12-31", "weekday": "שישי", "hebrew": "א׳ טבת תשפ״ח", "event": "חנוכה", "importance": "גבוהה", "action": "משפחות, ילדים, מבצעים ומנות חמות", "owner": "מרדכי"}], "journal": [{"date": "2026-07-01", "weekday": "רביעי", "hebrew": "ט״ז תמוז תשפ״ו", "event": null, "revenue": 10627.08, "transactions": 73, "deliveries": 8, "pickup": 9, "dine_in": 58, "cash_received": null, "credit_received": null, "tenbis_sibus": null, "wolt_mishloha": null, "other_payment": null, "cash_deposited": null, "notes": null}, {"date": "2026-07-02", "weekday": "חמישי", "hebrew": "י״ז תמוז תשפ״ו", "event": "בין המצרים", "revenue": 7628.72, "transactions": 67, "deliveries": 11, "pickup": 2, "dine_in": 54, "cash_received": null, "credit_received": null, "tenbis_sibus": null, "wolt_mishloha": null, "other_payment": null, "cash_deposited": null, "notes": "צום יז' בתמוז"}, {"date": "2026-07-03", "weekday": "שישי", "hebrew": "י״ח תמוז תשפ״ו", "event": "בין המצרים", "revenue": 1600.1, "transactions": 12, "deliveries": null, "pickup": 1, "dine_in": 16, "cash_received": null, "credit_received": null, "tenbis_sibus": null, "wolt_mishloha": null, "other_payment": null, "cash_deposited": null, "notes": "יום שישי"}, {"date": "2026-07-04", "weekday": "שבת", "hebrew": "י״ט תמוז תשפ״ו", "event": "בין המצרים", "revenue": 1525.8, "transactions": 14, "deliveries": 2, "pickup": 1, "dine_in": 19, "cash_received": null, "credit_received": null, "tenbis_sibus": null, "wolt_mishloha": null, "other_payment": null, "cash_deposited": null, "notes": "מוצא\"ש"}], "tasks": [{"id": "tk0", "title": "מסכי כניסה", "category": "שיווק", "owner": "מרדכי", "status": "מתוכנן", "priority": "רגילה", "due": null}, {"id": "tk1", "title": "טאבלטים למלצרים", "category": "שירות", "owner": "מרדכי", "status": "מתוכנן", "priority": "רגילה", "due": null}, {"id": "tk2", "title": "צילום מנות", "category": "שיווק", "owner": "אנה", "status": "מתוכנן", "priority": "רגילה", "due": null}, {"id": "tk3", "title": "פנייה לבתי ספר ועסקים", "category": "מכירות", "owner": "מרדכי", "status": "מתוכנן", "priority": "רגילה", "due": null}, {"id": "tk4", "title": "בדיקת כשרות", "category": "אסטרטגיה", "owner": "אנה + מרדכי", "status": "מתוכנן", "priority": "רגילה", "due": null}, {"id": "tk5", "title": "שדרוג הגשת מנות", "category": "תפריט", "owner": "אנה + מרדכי", "status": "מתוכנן", "priority": "רגילה", "due": null}, {"id": "tk6", "title": "קמפיין סלמון בין המצרים", "category": "שיווק", "owner": "מרדכי", "status": "בתהליך", "priority": "רגילה", "due": null}, {"id": "tk7", "title": "קמפיין קציצות דגים לשישי", "category": "שיווק", "owner": "אנה + מרדכי", "status": "מתוכנן", "priority": "רגילה", "due": null}], "menu": [{"id": "mn0", "name": "סלמון בעשבי תיבול", "category": null, "price": null, "cost": null, "status": "רעיון", "campaign": null}, {"id": "mn1", "name": "פיש אנד ציפס", "category": null, "price": null, "cost": null, "status": "רעיון", "campaign": null}, {"id": "mn2", "name": "קציצות דגים לשישי", "category": null, "price": null, "cost": null, "status": "רעיון", "campaign": null}, {"id": "mn3", "name": "פיתות טריות", "category": null, "price": null, "cost": null, "status": "רעיון", "campaign": null}, {"id": "mn4", "name": "סלטי הבית", "category": null, "price": null, "cost": null, "status": "רעיון", "campaign": null}]};
+
+/* ---------- icons ---------- */
+const IC = {
+  dash:'<path d="M3 3h7v8H3zM14 3h7v5h-7zM14 12h7v9h-7zM3 15h7v6H3z"/>',
+  journal:'<path d="M4 4h13l3 3v13H4z"/><path d="M8 9h8M8 13h8M8 17h5"/>',
+  calendar:'<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/>',
+  tasks:'<path d="M9 6h11M9 12h11M9 18h11"/><path d="M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2"/>',
+  menu:'<path d="M6 3v8a2 2 0 0 0 4 0V3M8 11v10M17 3c-2 0-3 2-3 5s1 4 3 4M17 3v18"/>',
+  reports:'<path d="M3 3v18h18"/><rect x="7" y="11" width="3" height="7"/><rect x="12" y="7" width="3" height="11"/><rect x="17" y="13" width="3" height="5"/>',
+  cash:'<rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/>',
+  send:'<path d="M22 2L11 13M22 2l-7 20-4-9-9-4z"/>',
+  clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  utensils:'<path d="M6 3v8a2 2 0 0 0 4 0V3M8 11v10M17 3c-2 0-3 2-3 5s1 4 3 4M17 3v18"/>',
+  up:'<path d="M12 19V5M5 12l7-7 7 7"/>', down:'<path d="M12 5v14M5 12l7 7 7-7"/>',
+  alert:'<path d="M12 9v4M12 17h.01M10.3 3.9L2 18a2 2 0 0 0 1.7 3h16.6A2 2 0 0 0 22 18L13.7 3.9a2 2 0 0 0-3.4 0z"/>',
+  trend:'<path d="M22 7l-8.5 8.5-5-5L2 17"/><path d="M16 7h6v6"/>',
+  check:'<path d="M20 6L9 17l-5-5"/>', plus:'<path d="M12 5v14M5 12h14"/>', x:'<path d="M18 6L6 18M6 6l12 12"/>',
+  pencil:'<path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',
+  target:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/>',
+  users:'<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/>',
+  mail:'<rect x="2" y="4" width="20" height="16" rx="2"/><path d="M2 7l10 6 10-6"/>',
+  gear:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1V21a2 2 0 1 1-4 0v-.1A1.6 1.6 0 0 0 6.6 19.4a2 2 0 1 1-2.8-2.8l.1-.1A1.6 1.6 0 0 0 3 13.6H3a2 2 0 1 1 0-4h.1A1.6 1.6 0 0 0 4.6 6.6a2 2 0 1 1 2.8-2.8l.1.1A1.6 1.6 0 0 0 10 3V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 2.7 1.1l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8"/>'
+};
+const svg = (k,cls='') => `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${IC[k]||''}</svg>`;
+
+/* ---------- state ---------- */
+const LS='pergo_mgmt_v1';
+function defaults(){ return {
+  journal:structuredClone(SEED.journal),tasks:structuredClone(SEED.tasks),menu:structuredClone(SEED.menu),
+  settings:structuredClone(SEED.settings),cash:structuredClone(SEED.cash),
+  leads:[
+    {id:'ld1',name:'ישיבת צור הדסה',category:'ישיבה',contact:'הרב כהן',role:'ראש ישיבה',phone:'050-1234567',tasting:'מגש פיצות',letter:true,stage:'שיחת מעקב',notes:null},
+    {id:'ld2',name:'בית ספר הראל',category:'בית ספר',contact:'המזכירה',role:null,phone:null,tasting:'סלמון',letter:false,stage:'אותר',notes:null}
+  ],
+  employees:[
+    {id:'em1',name:'יוסי',role:'פיצייה',cost:42,employer:55,status:'פעיל'},
+    {id:'em2',name:'דנה',role:'מלצר',cost:38,employer:50,status:'פעיל'}
+  ],
+  shifts:[] }; }
+function load(){ const base=defaults(); try{const r=localStorage.getItem(LS); if(r) return {...base,...JSON.parse(r)};}catch(e){} return base; }
+let S=load();
+function save(){ try{localStorage.setItem(LS,JSON.stringify(S));}catch(e){} }
+function resetAll(){ localStorage.removeItem(LS); S=load(); render(); toast('אופס לנתוני ברירת המחדל'); }
+
+/* ---------- helpers ---------- */
+const N=v=>Number.isFinite(+v)?+v:0;
+const money=(v,d=0)=>'₪'+new Intl.NumberFormat('he-IL',{maximumFractionDigits:d}).format(Math.round(N(v)*(d?100:1))/(d?100:1));
+const nf=v=>new Intl.NumberFormat('he-IL').format(Math.round(N(v)));
+const WD=['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
+const weekday=iso=>WD[new Date(iso+'T00:00:00').getDay()];
+const hebrew=iso=>{try{return new Intl.DateTimeFormat('he-u-ca-hebrew',{day:'numeric',month:'long',year:'numeric'}).format(new Date(iso+'T00:00:00'));}catch(e){return''}};
+const gregD=iso=>new Intl.DateTimeFormat('he-IL',{day:'2-digit',month:'2-digit',year:'numeric'}).format(new Date(iso+'T00:00:00'));
+const gregS=iso=>new Intl.DateTimeFormat('he-IL',{day:'2-digit',month:'2-digit'}).format(new Date(iso+'T00:00:00'));
+const todayISO=()=>{const d=new Date();d.setHours(0,0,0,0);
+  const days=SEED.journal.length?SEED.journal.map(j=>j.date):[]; // keep real today
+  return d.toISOString().slice(0,10);};
+function payTotals(e){ const tp=N(e.cash_received)+N(e.credit_received)+N(e.tenbis_sibus)+N(e.wolt_mishloha)+N(e.other_payment);
+  return {tp, diff:tp-N(e.revenue), toDep:N(e.cash_received)-N(e.cash_deposited), avg:N(e.transactions)>0?N(e.revenue)/N(e.transactions):0}; }
+
+/* ---------- calc ---------- */
+function metrics(){
+  const t=new Date(todayISO()+'T00:00:00'), y=t.getFullYear(), m=t.getMonth();
+  const dim=new Date(y,m+1,0).getDate(), refDay=t.getDate();
+  const rows=S.journal.filter(e=>{const d=new Date(e.date+'T00:00:00');return d.getFullYear()===y&&d.getMonth()===m&&N(e.revenue)>0;});
+  const cum=rows.reduce((s,e)=>s+N(e.revenue),0), n=rows.length, avgDaily=n?cum/n:0, pace=avgDaily*dim;
+  const target=N(S.settings.monthly_target), rem=Math.max(0,target-cum), left=Math.max(0,dim-refDay);
+  const tx=rows.reduce((s,e)=>s+N(e.transactions),0);
+  const today=S.journal.find(e=>e.date===todayISO());
+  return {cum,n,dim,avgDaily,pace,target,rem,left,needed:left?rem/left:0,
+    pct:target?cum/target:0,pacePct:target?pace/target:0,tx,avgOrder:tx?cum/tx:0,
+    deliveries:rows.reduce((s,e)=>s+N(e.deliveries),0),pickup:rows.reduce((s,e)=>s+N(e.pickup),0),
+    dineIn:rows.reduce((s,e)=>s+N(e.dine_in),0),todayRev:N(today&&today.revenue),
+    monthLabel:new Intl.DateTimeFormat('he-IL',{month:'long',year:'numeric'}).format(t)};
+}
+function cashStat(){
+  const t=new Date(todayISO()+'T00:00:00'),y=t.getFullYear(),m=t.getMonth();
+  const rows=S.journal.filter(e=>{const d=new Date(e.date+'T00:00:00');return d.getFullYear()===y&&d.getMonth()===m;});
+  const cr=rows.reduce((s,e)=>s+N(e.cash_received),0), cd=rows.reduce((s,e)=>s+N(e.cash_deposited),0);
+  const diff=rows.reduce((s,e)=>s+payTotals(e).diff,0);
+  return {bank:N(S.cash.bank_balance),reg:N(S.cash.cash_in_register),sup:N(S.cash.open_supplier_payments),
+    received:cr,deposited:cd,toDep:cr-cd,diff,depWarn:(cr-cd)>N(S.settings.cash_deposit_alert),diffAlert:Math.abs(diff)>.5};
+}
+const MINOR=new Set(['יום שישי','מוצאי שבת','']);
+function nextEvent(ref,win=14){
+  ref=ref||todayISO(); const rt=new Date(ref+'T00:00:00').getTime();
+  const rows=SEED.calendar.filter(c=>c.event&&!MINOR.has(c.event.trim())).sort((a,b)=>a.date<b.date?-1:1);
+  const per=[]; for(const c of rows){const ev=c.event.trim(),last=per[per.length-1];
+    const cons=last?(new Date(c.date)-new Date(last.end))/864e5<=1:false;
+    if(last&&last.event===ev&&cons)last.end=c.date; else per.push({event:ev,start:c.date,end:c.date,c});}
+  const cand=per.map(p=>{const st=new Date(p.start+'T00:00:00').getTime(),en=new Date(p.end+'T00:00:00').getTime();
+    return {p,active:st<=rt&&rt<=en,days:Math.round((st-rt)/864e5)};}).filter(x=>x.active||x.days>=0)
+    .sort((a,b)=>a.active===b.active?a.days-b.days:a.active?-1:1);
+  const ch=cand[0]; if(!ch||(!ch.active&&ch.days>win))return null;
+  return {...ch.p.c,event:ch.p.event,start:ch.p.start,days:Math.max(0,ch.days),active:ch.active};
+}
+function upcomingEvents(n){
+  const t=todayISO(),rows=SEED.calendar.filter(c=>c.event&&!MINOR.has(c.event.trim())).sort((a,b)=>a.date<b.date?-1:1);
+  const per=[];for(const c of rows){const ev=c.event.trim(),last=per[per.length-1];
+    const cons=last?(new Date(c.date)-new Date(last.end))/864e5<=1:false;
+    if(last&&last.event===ev&&cons)last.end=c.date;else per.push({event:ev,start:c.date,end:c.date,c});}
+  return per.map(p=>{const days=Math.round((new Date(p.start)-new Date(t))/864e5);
+    return {...p.c,event:p.event,start:p.start,end:p.end,days,active:p.start<=t&&p.end>=t};})
+    .filter(p=>p.end>=t).slice(0,n);
+}
+function taskSum(){ const open=S.tasks.filter(t=>t.status!=='בוצע');
+  return {inProg:S.tasks.filter(t=>t.status==='בתהליך').length,stuck:S.tasks.filter(t=>t.status==='תקוע').length,
+    open:open.length,done:S.tasks.filter(t=>t.status==='בוצע').length,
+    nearest:open.find(t=>t.status==='בתהליך')||open[0]||null}; }
+function lights(){
+  const m=metrics(),c=cashStat(),ts=taskSum(),ev=nextEvent();const L=[];
+  if(m.pacePct>=1)L.push(['good','trend','מחזור בקצב היעד',`צפי ${Math.round(m.pacePct*100)}% מהיעד`]);
+  else if(m.pacePct>=.85)L.push(['warn','trend','מחזור מתחת לקצב',`צפי ${Math.round(m.pacePct*100)}% מהיעד`]);
+  else L.push(['bad','trend','מחזור נמוך',`צפי ${Math.round(m.pacePct*100)}% מהיעד — דרוש דחיפה`]);
+  if(c.depWarn)L.push(['warn','cash','מזומן לא הופקד',`${nf(c.toDep)} ₪ ממתינים להפקדה`]);
+  if(c.diffAlert)L.push(['bad','alert','אי־התאמת אמצעי תשלום','סה״כ אמצעי תשלום שונה מהמחזור']);
+  if(ev&&ev.active)L.push(['warn','calendar','אירוע פעיל',`${ev.event} — בתקופה כעת`]);
+  else if(ev&&ev.days<=7)L.push(['warn','calendar','היערכות לאירוע',`${ev.event} בעוד ${ev.days} ימים`]);
+  if(ts.stuck)L.push(['bad','alert','משימות תקועות',`${ts.stuck} משימות דורשות טיפול`]);
+  if(L.every(l=>l[0]==='good'))L.push(['good','check','הכל תקין','אין התראות פתוחות']);
+  return L;
+}
+
+/* ---------- gauge ---------- */
+function gauge(val,max,zones){
+  const f=max>0?Math.max(0,Math.min(val/max,1)):0, cx=100,cy=100,r=80, ang=180-f*180;
+  const pol=d=>{const a=d*Math.PI/180;return [cx+r*Math.cos(a),cy-r*Math.sin(a)];};
+  let prev=0,arcs='';
+  (zones||[[.5,'var(--bad)'],[.8,'var(--warn)'],[1,'var(--good)']]).forEach(([to,col])=>{
+    const [x0,y0]=pol(180-prev*180),[x1,y1]=pol(180-to*180);prev=to;
+    arcs+=`<path d="M ${x0.toFixed(1)} ${y0.toFixed(1)} A ${r} ${r} 0 0 1 ${x1.toFixed(1)} ${y1.toFixed(1)}" fill="none" stroke="${col}" stroke-width="12" stroke-linecap="round"/>`;
+  });
+  const [nx,ny]=pol(ang);
+  return `<svg viewBox="0 8 200 110" style="width:100%;max-width:290px">
+    <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="var(--surface-2)" stroke-width="12" stroke-linecap="round"/>
+    ${arcs}<line class="needle" x1="100" y1="100" x2="${nx.toFixed(1)}" y2="${ny.toFixed(1)}" stroke="var(--ink)" stroke-width="3.4" stroke-linecap="round"/>
+    <circle cx="100" cy="100" r="6" fill="var(--ink)"/><circle cx="100" cy="100" r="2.4" fill="var(--surface)"/></svg>`;
+}
+function bars(data,color,fmt){
+  if(!data.length)return `<div class="empty">אין נתונים</div>`;
+  const max=Math.max(...data.map(d=>d.v))||1,W=100,H=64,bw=W/data.length*0.6,gap=W/data.length;
+  let b='';data.forEach((d,i)=>{const h=Math.max(2,d.v/max*(H-14)),x=i*gap+(gap-bw)/2,yv=H-h-12;
+    b+=`<rect x="${x.toFixed(1)}" y="${yv.toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" rx="1.6" fill="${color}"/>
+        <text x="${(x+bw/2).toFixed(1)}" y="${H-3}" font-size="4.4" fill="var(--mute)" text-anchor="middle">${d.name}</text>`;});
+  return `<svg viewBox="0 0 100 ${H}" style="width:100%;height:150px" preserveAspectRatio="none">${b}</svg>`;
+}
+
+/* ---------- screens ---------- */
+const TABS=[['dash','דשבורד','dash'],['journal','יומן','journal'],['cashflow','תזרים','cash'],
+  ['calendar','לוח שנה','calendar'],['tasks','משימות','tasks'],['leads','לקוחות','target'],
+  ['menu','תפריט','menu'],['reports','דוחות','reports'],['employees','עובדים','users'],
+  ['zreport','דוח Z','mail'],['settings','הגדרות','gear']];
+let TAB='dash';
+
+function screenDash(){
+  const m=metrics(),c=cashStat(),ev=nextEvent(),ts=taskSum(),L=lights();
+  const paceLvl=m.pacePct>=1?'good':m.pacePct>=.85?'warn':'bad';
+  const aoLvl=m.avgOrder>=S.settings.avg_order_target?'good':m.avgOrder>=S.settings.avg_order_target*.8?'warn':'bad';
+  const meta=(k,v,lvl)=>`<div class="m"><small>${k}</small><b class="tnum" style="color:${lvl?`var(--${lvl})`:'var(--ink)'}">${v}</b></div>`;
+  return `
+  <div class="sec"><div class="grid lights">${L.map(l=>`<div class="light lv-${l[0]}"><div class="ic">${svg(l[1])}</div>
+    <div><b>${l[2]}</b><small>${l[3]}</small></div></div>`).join('')}</div></div>
+
+  <div class="sec"><h2>שעוני מחוונים</h2><div class="grid gauges">
+    <div class="card gcard"><h3>מחזור ${m.monthLabel}</h3>${gauge(m.cum,m.target)}
+      <div class="gbig tnum">${money(m.cum)}</div>
+      <div class="gmeta">${meta('יעד',money(m.target))}${meta('נותר',money(m.rem),m.rem?'warn':'good')}${meta('% מהיעד',Math.round(m.pct*100)+'%',paceLvl)}</div></div>
+    <div class="card gcard"><h3>קצב חודשי משוער</h3>${gauge(m.pace,m.target*1.2,[[.5/1.2,'var(--bad)'],[.83/1.2,'var(--warn)'],[1,'var(--good)']])}
+      <div class="gbig tnum">${money(m.pace)}</div>
+      <div class="gmeta">${meta('ממוצע יומי',money(m.avgDaily))}${meta('ימים',m.n+'/'+m.dim)}${meta('למכור ליום',money(m.needed),'warn')}</div></div>
+    <div class="card gcard"><h3>ממוצע הזמנה</h3>${gauge(m.avgOrder,S.settings.avg_order_target*2)}
+      <div class="gbig tnum">${money(m.avgOrder)}</div>
+      <div class="gmeta">${meta('יעד',money(S.settings.avg_order_target))}${meta('עסקאות',nf(m.tx))}${meta('מצב',m.avgOrder>=S.settings.avg_order_target?'מעל':'מתחת',aoLvl)}</div></div>
+  </div></div>
+
+  <div class="sec"><h2>תמונת מצב</h2><div class="grid kpis">
+    ${kpi('מחזור היום',money(m.todayRev),'cash')}${kpi('משלוחים',nf(m.deliveries),'send')}
+    ${kpi('איסוף עצמי',nf(m.pickup),'clock')}${kpi('ישיבה במקום',nf(m.dineIn),'utensils')}
+    ${kpi('יתרת בנק',money(c.bank),'cash')}${kpi('מזומן בקופה',money(c.reg),'cash')}
+    ${kpi('מזומן להפקדה',money(c.toDep),'up',c.depWarn?'warn':'good')}
+    ${kpi('הפרש אמצעי תשלום',money(c.diff),'alert',c.diffAlert?'bad':'good')}
+  </div></div>
+
+  <div class="two">
+    <div class="card pad"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <h2 style="font-size:1.02rem;font-weight:800">אירוע עסקי קרוב</h2>
+      <button class="chip acc" onclick="go('calendar')" style="cursor:pointer">לוח שנה ←</button></div>
+      ${ev?`<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span style="font-size:1.3rem;font-weight:800">${ev.active?'🔴 ':''}${ev.event}</span>
+        ${ev.importance?`<span class="chip ${ev.importance==='גבוהה'?'bad':'warn'}">חשיבות ${ev.importance}</span>`:''}</div>
+        <div style="color:var(--warn);font-weight:700;font-size:.9rem;margin-top:3px">${ev.active?'בתקופה זו כעת':'בעוד '+ev.days+' ימים · '+gregD(ev.start)}</div>
+        ${ev.action?`<div style="background:var(--surface-2);border-radius:11px;padding:11px 13px;margin-top:11px;font-size:.88rem">
+          <div style="font-size:.68rem;color:var(--mute);margin-bottom:2px">המשימה הבאה להכנה</div>${ev.action}</div>`:''}
+        ${ev.owner?`<div style="font-size:.85rem;color:var(--dim);margin-top:9px">אחראי: <b>${ev.owner}</b></div>`:''}`
+      :`<div style="color:var(--dim)">אין אירוע מיוחד בקרוב</div>`}
+    </div>
+    <div class="card pad"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <h2 style="font-size:1.02rem;font-weight:800">משימות</h2>
+      <button class="chip acc" onclick="go('tasks')" style="cursor:pointer">הכל ←</button></div>
+      <div class="comp" style="margin-top:0">
+        <div class="c"><small>בתהליך</small><b class="tnum" style="color:var(--warn)">${ts.inProg}</b></div>
+        <div class="c"><small>תקועות</small><b class="tnum" style="color:${ts.stuck?'var(--bad)':'var(--good)'}">${ts.stuck}</b></div>
+        <div class="c"><small>פתוחות</small><b class="tnum">${ts.open}</b></div>
+        <div class="c"><small>בוצעו</small><b class="tnum" style="color:var(--good)">${ts.done}</b></div></div>
+      ${ts.nearest?`<div style="background:var(--surface-2);border-radius:11px;padding:11px 13px;margin-top:11px">
+        <div style="font-size:.68rem;color:var(--mute)">המשימה הקרובה</div><b>${ts.nearest.title}</b>
+        <div style="font-size:.76rem;color:var(--dim);margin-top:2px">${[ts.nearest.owner,ts.nearest.category,ts.nearest.status].filter(Boolean).join(' · ')}</div></div>`:''}
+    </div>
+  </div>
+  <div class="foot">מערכת ניהול פרגו · הנתונים נשמרים בדפדפן הזה · <button class="chip" style="cursor:pointer" onclick="resetAll()">איפוס לברירת מחדל</button></div>`;
+}
+const kpi=(k,v,ic,lvl)=>`<div class="card kpi"><small>${k} ${svg(ic)}</small><b class="tnum" style="color:${lvl?`var(--${lvl})`:'var(--ink)'}">${v}</b></div>`;
+
+function screenJournal(){
+  const rows=[...S.journal].sort((a,b)=>a.date<b.date?1:-1);
+  return `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:10px;flex-wrap:wrap">
+    <div style="font-size:.86rem;color:var(--dim)">${S.journal.length} ימים הוזנו · ימים ריקים לא נספרים בגרפים</div>
+    <button class="btn" onclick="openEntry()">${svg('plus')} הזנת יום</button></div>
+    ${rows.length?`<div class="card tscroll"><table><thead><tr>
+      <th>תאריך</th><th>יום</th><th>אירוע</th><th>מחזור</th><th>עסקאות</th><th>ממוצע</th><th>סה״כ תשלום</th><th>הפרש</th><th>להפקדה</th></tr></thead>
+      <tbody>${rows.map(e=>{const p=payTotals(e);return `<tr onclick='openEntry(${JSON.stringify(e.date)})'>
+        <td style="font-weight:700">${gregD(e.date)}</td><td style="color:var(--dim)">${e.weekday||weekday(e.date)}</td>
+        <td style="color:var(--dim)">${e.event||'—'}</td><td style="font-weight:700" class="tnum">${money(e.revenue)}</td>
+        <td class="tnum">${e.transactions??'—'}</td><td class="tnum">${money(p.avg)}</td><td class="tnum">${money(p.tp)}</td>
+        <td class="tnum" style="color:${Math.abs(p.diff)>.5?'var(--bad)':'var(--dim)'}">${money(p.diff)}</td>
+        <td class="tnum" style="color:${p.toDep>0?'var(--warn)':'var(--dim)'}">${money(p.toDep)}</td></tr>`;}).join('')}</tbody></table></div>`
+    :`<div class="card empty"><b>עדיין אין ימים ביומן</b>לחצו על ‘הזנת יום’ כדי להתחיל</div>`}`;
+}
+
+function screenCalendar(){
+  const t=todayISO(),ups=upcomingEvents(60);
+  return `${ups.length?`<div class="grid" style="gap:11px">${ups.map(c=>{
+    return `<div class="card pad" style="display:flex;gap:13px;align-items:flex-start">
+      <div class="cnt"><b class="tnum">${c.days<=0?'היום':c.days}</b><small>${c.days<=0?'':'ימים'}</small></div>
+      <div style="min-width:0;flex:1">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><b>${c.event}</b>
+          ${c.importance?`<span class="chip ${c.importance==='גבוהה'?'bad':'warn'}">${c.importance}</span>`:''}</div>
+        <div style="font-size:.76rem;color:var(--dim);margin-top:2px">${gregD(c.start)} · ${c.weekday||''} · ${c.hebrew||''}</div>
+        ${c.action?`<div style="background:var(--surface-2);border-radius:10px;padding:9px 11px;margin-top:8px;font-size:.86rem">${c.action}</div>`:''}
+        ${c.owner?`<span class="chip" style="margin-top:8px">👤 ${c.owner}</span>`:''}</div></div>`;}).join('')}</div>`
+    :`<div class="card empty"><b>אין אירועים קרובים</b></div>`}`;
+}
+
+function screenTasks(){
+  const lvl=s=>s==='בוצע'?'good':s==='תקוע'?'bad':s==='בתהליך'?'warn':'';
+  return `<div style="display:flex;justify-content:flex-end;margin-bottom:14px"><button class="btn" onclick="openTask()">${svg('plus')} משימה</button></div>
+    <div class="grid" style="gap:10px">${S.tasks.map(t=>`<div class="card pad" style="display:flex;align-items:center;gap:12px">
+      <button onclick="toggleTask('${t.id}')" style="width:24px;height:24px;border-radius:7px;border:2px solid var(--border);cursor:pointer;flex:0 0 auto;
+        background:${t.status==='בוצע'?'var(--good)':'transparent'};color:#fff;display:grid;place-items:center">${t.status==='בוצע'?svg('check'):''}</button>
+      <div style="flex:1;min-width:0;cursor:pointer" onclick="openTask('${t.id}')">
+        <div style="font-weight:700;${t.status==='בוצע'?'text-decoration:line-through;color:var(--mute)':''}">${t.title}</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:5px">
+          <span class="chip ${lvl(t.status)}">${t.status}</span>${t.category?`<span class="chip">${t.category}</span>`:''}
+          ${t.owner?`<span class="chip">👤 ${t.owner}</span>`:''}${t.priority==='גבוהה'?`<span class="chip bad">עדיפות גבוהה</span>`:''}</div>
+      </div><button class="x" onclick="openTask('${t.id}')">${svg('pencil')}</button></div>`).join('')}</div>`;
+}
+
+function screenMenu(){
+  const tgt=N(S.settings.food_cost_target);
+  return `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+    <div style="font-size:.86rem;color:var(--dim)">יעד פוד קוסט: ${tgt}%</div>
+    <button class="btn" onclick="openDish()">${svg('plus')} מנה</button></div>
+    <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(250px,1fr))">${S.menu.map(mi=>{
+      const price=N(mi.price),cost=N(mi.cost),fc=price>0?Math.round(cost/price*1000)/10:null,high=fc!=null&&fc>tgt;
+      return `<div class="card pad" style="cursor:pointer" onclick="openDish('${mi.id}')">
+        <div style="display:flex;justify-content:space-between;align-items:start"><b>${mi.name}</b>
+          <span class="chip ${mi.status==='פעיל'?'good':mi.status==='ירד'?'bad':''}">${mi.status}</span></div>
+        ${mi.campaign?`<span class="chip acc" style="margin-top:6px">${mi.campaign}</span>`:''}
+        <div class="comp" style="grid-template-columns:repeat(3,1fr);margin-top:11px">
+          <div class="c"><small>מחיר</small><b class="tnum">${mi.price!=null?money(mi.price):'—'}</b></div>
+          <div class="c"><small>עלות</small><b class="tnum">${mi.cost!=null?money(mi.cost):'—'}</b></div>
+          <div class="c"><small>פוד קוסט</small><b class="tnum" style="color:${fc==null?'var(--ink)':high?'var(--bad)':'var(--good)'}">${fc!=null?fc+'%':'—'}</b></div></div>
+        ${high?`<div style="font-size:.74rem;color:var(--bad);margin-top:8px">⚠ מעל היעד — דורש החלטה מפורשת</div>`:''}</div>`;}).join('')}</div>`;
+}
+
+function screenReports(){
+  const wd=[...S.journal].filter(e=>N(e.revenue)>0).sort((a,b)=>a.date<b.date?-1:1);
+  if(!wd.length)return `<div class="card empty"><b>אין נתונים לדוחות</b>הזינו ימים ביומן</div>`;
+  const m=metrics();
+  const daily=wd.map(e=>({name:gregS(e.date),v:N(e.revenue)}));
+  let acc=0;const cum=wd.map(e=>{acc+=N(e.revenue);return {name:gregS(e.date),v:acc};});
+  const byW={};wd.forEach(e=>{const w=e.weekday||weekday(e.date);byW[w]=(byW[w]||0)+N(e.revenue);});
+  const wData=WD.filter(w=>byW[w]).map(w=>({name:w,v:byW[w]}));
+  const orders=[['משלוחים','deliveries'],['איסוף','pickup'],['ישיבה','dine_in']]
+    .map(([n,k])=>({name:n,v:wd.reduce((s,e)=>s+N(e[k]),0)})).filter(o=>o.v>0);
+  return `<div class="sec"><h2>סיכום החודש</h2><div class="grid kpis">
+    ${kpi('מחזור מצטבר',money(m.cum),'trend')}${kpi('% מהיעד',Math.round(m.pct*100)+'%','trend',m.pct>=1?'good':m.pct>=.85?'warn':'bad')}
+    ${kpi('ממוצע הזמנה',money(m.avgOrder),'cash')}${kpi('ימים עם נתונים',m.n+'/'+m.dim,'calendar')}</div></div>
+    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr))">
+      <div class="card barcard"><h3>מחזור יומי</h3>${bars(daily,'var(--accent)')}</div>
+      <div class="card barcard"><h3>מחזור מצטבר</h3>${bars(cum,'var(--accent-ink)')}</div>
+      <div class="card barcard"><h3>מחזור לפי יום בשבוע</h3>${bars(wData,'#0891b2')}</div>
+      <div class="card barcard"><h3>סוגי הזמנות</h3>${bars(orders,'var(--good)')}</div>
+    </div>`;
+}
+
+function screenCashflow(){
+  const c=cashStat();
+  const ban=(lvl,t)=>`<div class="banner ${lvl}">${svg('alert')}${t}</div>`;
+  return `${c.depWarn?ban('warn',`יש ${money(c.toDep)} מזומן שטרם הופקד — מומלץ להפקיד.`):''}
+    ${c.diffAlert?ban('bad','קיים הפרש בין סה״כ אמצעי התשלום למחזור — דורש בדיקה.'):''}
+    <div class="sec"><h2>יתרות נוכחיות</h2>
+      <div style="display:flex;justify-content:flex-end;margin-bottom:10px"><button class="btn sm" onclick="openCash()">${svg('pencil')} עדכון יתרות</button></div>
+      <div class="grid kpis">${kpi('יתרת בנק',money(c.bank),'cash')}${kpi('מזומן בקופה',money(c.reg),'cash')}${kpi('תשלומים פתוחים לספקים',money(c.sup),'alert',c.sup>0?'warn':null)}</div></div>
+    <div class="sec"><h2>מזומן והפקדות (החודש)</h2><div class="grid kpis">
+      ${kpi('מזומן שהתקבל',money(c.received),'down')}${kpi('מזומן שהופקד',money(c.deposited),'up')}
+      ${kpi('צריך להפקיד',money(c.toDep),'cash',c.depWarn?'warn':'good')}${kpi('הפרש מול מחזור',money(c.diff),'alert',c.diffAlert?'bad':'good')}</div>
+      <div style="font-size:.76rem;color:var(--mute);margin-top:10px">נתוני המזומן וההפקדות מחושבים אוטומטית מהיומן היומי — אין הזנה כפולה.</div></div>`;
+}
+
+const STAGES=['אותר','טעימה נשלחה','שיחת מעקב','הזמנה ראשונה','לקוח קבוע'];
+const LTARGET={'אותר':100,'טעימה נשלחה':100,'שיחת מעקב':50,'הזמנה ראשונה':20,'לקוח קבוע':10};
+function screenLeads(){
+  const idx=s=>STAGES.indexOf(s),reached=st=>S.leads.filter(l=>idx(l.stage)>=idx(st)).length;
+  return `<div class="sec"><h2>משפך לקוחות עסקיים (יעד רבעוני)</h2>
+    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(138px,1fr))">${STAGES.map(s=>{
+      const v=s==='אותר'?S.leads.length:reached(s),t=LTARGET[s],pct=Math.min(100,Math.round(v/t*100));
+      return `<div class="card kpi"><small>${s}</small><b class="tnum">${v}<span style="font-size:.8rem;color:var(--mute);font-weight:400"> / ${t}</span></b>
+        <div style="height:5px;border-radius:5px;background:var(--surface-2);margin-top:8px;overflow:hidden"><div style="height:100%;width:${pct}%;background:var(--accent)"></div></div></div>`;}).join('')}</div></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><h2 style="font-size:1rem;font-weight:800">רשימת לקוחות (${S.leads.length})</h2>
+      <button class="btn" onclick="openLead()">${svg('plus')} לקוח</button></div>
+    ${S.leads.length?`<div class="grid" style="gap:10px">${S.leads.map(l=>`<div class="card pad" style="display:flex;align-items:center;gap:12px;cursor:pointer" onclick="openLead('${l.id}')">
+      <div style="flex:1;min-width:0"><b>${l.name}</b><div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:5px">
+        <span class="chip acc">${l.stage}</span>${l.category?`<span class="chip">${l.category}</span>`:''}${l.contact?`<span class="chip">${l.contact}</span>`:''}${l.letter?`<span class="chip good">מכתב נשלח</span>`:''}</div></div>
+      ${svg('pencil','ico16')}</div>`).join('')}</div>`:`<div class="card empty"><b>אין לקוחות עדיין</b>הוסיפו בית ספר, ישיבה, עסק או מוסד</div>`}`;
+}
+
+function weekDates(){const now=new Date(todayISO()+'T00:00:00'),sun=new Date(now);sun.setDate(now.getDate()-now.getDay());
+  return Array.from({length:7},(_,i)=>{const d=new Date(sun);d.setDate(sun.getDate()+i);return d.toISOString().slice(0,10);});}
+function screenEmployees(){
+  const wk=weekDates(),byId={};S.employees.forEach(e=>byId[e.id]=e);
+  const ws=S.shifts.filter(s=>wk.includes(s.date)),hrs=ws.reduce((s,x)=>s+N(x.hours),0);
+  const cost=ws.reduce((s,x)=>{const e=byId[x.emp];return s+N(e&&(e.employer||e.cost))*N(x.hours);},0);
+  return `<div class="sec"><h2>מצבת שבועית</h2><div class="grid kpis" style="margin-bottom:12px">
+    ${kpi('סך שעות מתוכננות',nf(hrs),'clock')}${kpi('עלות שכר צפויה',money(cost),'cash',cost>0?'warn':null)}${kpi('עובדים פעילים',nf(S.employees.filter(e=>e.status==='פעיל').length),'users')}</div>
+    <div class="card tscroll"><table><thead><tr><th>יום</th><th>תאריך</th><th>משמרות</th><th>שעות</th><th></th></tr></thead><tbody>
+    ${wk.map((d,i)=>{const sh=ws.filter(s=>s.date===d),h=sh.reduce((s,x)=>s+N(x.hours),0);
+      return `<tr><td style="font-weight:700">${WD[i]}</td><td style="color:var(--dim)">${gregS(d)}</td>
+      <td><div style="display:flex;gap:5px;flex-wrap:wrap">${sh.length?sh.map(s=>`<span class="chip" onclick="delShift('${s.id}')" style="cursor:pointer">${byId[s.emp]?byId[s.emp].name:'לא שובץ'} · ${s.type||''} ${N(s.hours)}ש׳</span>`).join(''):'<span style="color:var(--mute)">—</span>'}</div></td>
+      <td class="tnum">${h||'—'}</td><td><button class="btn ghost sm" onclick="openShift('${d}')">${svg('plus')}</button></td></tr>`;}).join('')}</tbody></table></div></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><h2 style="font-size:1rem;font-weight:800">עובדים (${S.employees.length})</h2>
+      <button class="btn" onclick="openEmp()">${svg('plus')} עובד</button></div>
+    <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(215px,1fr))">${S.employees.map(e=>`<div class="card pad" style="cursor:pointer" onclick="openEmp('${e.id}')">
+      <div style="display:flex;justify-content:space-between;align-items:start"><b>${e.name}</b><span class="chip ${e.status==='פעיל'?'good':e.status==='סיים'?'bad':'warn'}">${e.status}</span></div>
+      <div style="font-size:.78rem;color:var(--dim);margin-top:4px">${e.role||'—'}</div>
+      ${e.cost!=null?`<div style="font-size:.78rem;margin-top:4px">עלות שעתית: <b class="tnum">${money(e.cost)}</b></div>`:''}</div>`).join('')}</div>`;
+}
+
+let zDate=null,zMails='';
+function screenZreport(){
+  if(!zDate)zDate=todayISO();
+  const e=S.journal.find(x=>x.date===zDate)||null,p=e?payTotals(e):{tp:0,diff:0,toDep:0,avg:0},ev=nextEvent(zDate);
+  const open=S.tasks.filter(t=>t.status!=='בוצע'&&(t.priority==='גבוהה'||t.status==='בתהליך')).map(t=>t.title).slice(0,6);
+  const L=(k,v)=>`${k}: ${v}`;
+  const rep=[`דוח Z יומי – תמונת מצב פרגו`,`תאריך: ${gregD(zDate)}`,'',
+    L('מחזור יומי',e&&e.revenue!=null?money(e.revenue):'לא הוזן'),L('מספר עסקאות',e&&e.transactions!=null?e.transactions:'—'),L('ממוצע הזמנה',money(p.avg)),'',
+    L('מזומן שהתקבל',money(e&&e.cash_received)),L('אשראי / קופה',money(e&&e.credit_received)),L('תן ביס / סיבוס',money(e&&e.tenbis_sibus)),
+    L('וולט / משלוחה',money(e&&e.wolt_mishloha)),L('אחר',money(e&&e.other_payment)),L('סה״כ אמצעי תשלום',money(p.tp)),
+    L('הפרש מול מחזור',money(p.diff)),L('מזומן שהופקד',money(e&&e.cash_deposited)),L('מזומן שצריך להפקיד',money(p.toDep)),'',
+    L('משלוחים',e&&e.deliveries!=null?e.deliveries:'—'),L('איסוף עצמי',e&&e.pickup!=null?e.pickup:'—'),L('ישיבה במקום',e&&e.dine_in!=null?e.dine_in:'—'),'',
+    L('הערות חריגות',(e&&e.notes)||'אין'),L('אירוע עסקי קרוב',ev?`${ev.event} (${ev.active?'כעת':'בעוד '+ev.days+' ימים'})`:'אין אירוע מיוחד בקרוב'),'',
+    'משימות פתוחות חשובות:',...(open.length?open.map(t=>'• '+t):['• אין'])].join('\n');
+  window.__zrep=rep;
+  return `<div class="sec"><h2>דוח Z יומי – תמונת מצב פרגו</h2>
+    <div class="card pad" style="display:grid;gap:11px;grid-template-columns:1fr 1fr">
+      <div><label class="lbl">תאריך הדוח</label><input type="date" value="${zDate}" onchange="zDate=this.value;render()"></div>
+      <div><label class="lbl">שליחה למיילים (מופרד בפסיק)</label><input value="${zMails}" placeholder="mordechai@… , ana@…" style="direction:ltr" oninput="zMails=this.value"></div></div></div>
+    <div class="card pad"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <b style="font-size:.9rem">תצוגה מקדימה</b><div style="display:flex;gap:8px">
+        <button class="btn ghost sm" onclick="navigator.clipboard.writeText(window.__zrep);toast('הדוח הועתק')">${svg('check')} העתקה</button>
+        <button class="btn sm" onclick="sendZ()">${svg('send')} שליחה במייל</button></div></div>
+      <pre style="white-space:pre-wrap;background:var(--surface-2);border-radius:11px;padding:14px;font-size:.84rem;line-height:1.7;font-family:inherit">${rep}</pre>
+      <div style="font-size:.74rem;color:var(--mute);margin-top:10px">שליחה ידנית פעילה. שליחה אוטומטית יומית בשעה קבועה תתווסף במערכת המלאה.</div></div>`;
+}
+function sendZ(){window.location.href='mailto:'+encodeURIComponent(zMails)+'?subject='+encodeURIComponent('דוח Z יומי – פרגו – '+gregD(zDate))+'&body='+encodeURIComponent(window.__zrep||'');}
+
+function screenSettings(){
+  const s=S.settings;
+  return `<div class="sec"><h2>הגדרות מערכת</h2>
+    <div class="card pad" style="max-width:560px;display:grid;gap:11px"><div class="fgrid">
+      <div><label class="lbl">שם העסק</label><input id="s_biz" value="${s.business||''}"></div>
+      <div><label class="lbl">מיקום</label><input id="s_loc" value="${s.location||''}"></div>
+      <div><label class="lbl">יעד מחזור חודשי (₪)</label><input type="number" id="s_target" value="${s.monthly_target}"></div>
+      <div><label class="lbl">יעד ממוצע הזמנה (₪)</label><input type="number" id="s_ao" value="${s.avg_order_target}"></div>
+      <div><label class="lbl">יעד פוד קוסט (%)</label><input type="number" id="s_fc" value="${s.food_cost_target}"></div>
+      <div><label class="lbl">סף התראת הפקדה (₪)</label><input type="number" id="s_dep" value="${s.cash_deposit_alert}"></div></div>
+      <div><label class="lbl">שותפים (מופרד בפסיק)</label><input id="s_partners" value="${(s.partners||[]).join(', ')}"></div>
+      <div style="display:flex;gap:9px;align-items:center"><button class="btn" onclick="saveSettings()">${svg('check')} שמירה</button>
+        <button class="btn ghost" onclick="resetAll()">איפוס נתונים</button></div></div></div>
+    <div class="sec"><h2>תפקידים (עתידי)</h2><div class="card pad" style="font-size:.86rem;color:var(--dim)">
+      מבנה ההרשאות מוכן: <b>מנהל · שותפה · עובד · רואה חשבון</b>. בשלב זה אין אכיפת הרשאות — יתווסף במערכת המלאה.</div></div>`;
+}
+function saveSettings(){const g=id=>document.getElementById(id).value;
+  S.settings={...S.settings,business:g('s_biz'),location:g('s_loc'),monthly_target:N(g('s_target')),avg_order_target:N(g('s_ao')),
+    food_cost_target:N(g('s_fc')),cash_deposit_alert:N(g('s_dep')),partners:g('s_partners').split(',').map(x=>x.trim()).filter(Boolean)};
+  save();render();toast('ההגדרות נשמרו');}
+
+/* ---------- modals ---------- */
+function modal(title,body,footer){
+  document.getElementById('modal-root').innerHTML=`<div class="ov" onclick="if(event.target===this)closeModal()">
+    <div class="modal"><div class="mhead"><h3>${title}</h3><button class="x" onclick="closeModal()">${svg('x')}</button></div>
+    <div class="mbody">${body}</div>${footer?`<div style="padding:0 18px 18px;display:flex;gap:9px">${footer}</div>`:''}</div></div>`;
+}
+function closeModal(){document.getElementById('modal-root').innerHTML='';}
+
+const NUMF=[['revenue','מחזור (₪)'],['transactions','עסקאות'],['deliveries','משלוחים'],['pickup','איסוף עצמי'],['dine_in','ישיבה במקום'],
+  ['cash_received','מזומן'],['credit_received','אשראי/קופה'],['tenbis_sibus','תן ביס/סיבוס'],['wolt_mishloha','וולט/משלוחה'],['other_payment','אחר'],['cash_deposited','הופקד לבנק']];
+function openEntry(date){
+  const e=date?S.journal.find(x=>x.date===date):null;
+  const d=e?e.date:todayISO();
+  const fields=NUMF.map(([k,l])=>`<div><label class="lbl">${l}</label><input type="number" inputmode="decimal" id="f_${k}" value="${e&&e[k]!=null?e[k]:''}" placeholder="0" oninput="liveCalc()"></div>`).join('');
+  modal(e?'עריכת יום':'הזנת יום חדש',
+    `<div class="fgrid" style="grid-template-columns:1fr 1fr"><div><label class="lbl">תאריך</label><input type="date" id="f_date" value="${d}" onchange="onDate()"></div>
+      <div><label class="lbl">אירוע / תקופה</label><input id="f_event" value="${e&&e.event?e.event:''}" placeholder="ללא"></div></div>
+     <div id="autochips" style="display:flex;gap:6px;margin:10px 0;flex-wrap:wrap"></div>
+     <div class="fgrid">${fields}</div>
+     <div style="margin-top:11px"><label class="lbl">הערות חריגות</label><input id="f_notes" value="${e&&e.notes?e.notes:''}"></div>
+     <div class="comp" id="live"></div>`,
+    `<button class="btn" onclick="saveEntry(${JSON.stringify(date||null)})">${svg('check')} שמירה</button>
+     <button class="btn ghost" onclick="closeModal()">ביטול</button>`);
+  onDate();liveCalc();
+}
+function onDate(){const d=document.getElementById('f_date').value;
+  const cal=SEED.calendar.find(c=>c.date===d);
+  document.getElementById('autochips').innerHTML=`<span class="chip">${weekday(d)}</span><span class="chip">${hebrew(d)}</span>${cal?`<span class="chip acc">מהלוח: ${cal.event}</span>`:''}`;
+}
+function liveCalc(){const g=k=>N(document.getElementById('f_'+k).value);
+  const tp=g('cash_received')+g('credit_received')+g('tenbis_sibus')+g('wolt_mishloha')+g('other_payment');
+  const diff=tp-g('revenue'),toDep=g('cash_received')-g('cash_deposited'),avg=g('transactions')>0?g('revenue')/g('transactions'):0;
+  document.getElementById('live').innerHTML=
+    `<div class="c"><small>ממוצע הזמנה</small><b class="tnum" style="color:var(--accent)">${money(avg)}</b></div>
+     <div class="c"><small>סה״כ תשלום</small><b class="tnum" style="color:var(--accent)">${money(tp)}</b></div>
+     <div class="c"><small>הפרש</small><b class="tnum" style="color:${Math.abs(diff)>.5?'var(--bad)':'var(--good)'}">${money(diff)}</b></div>
+     <div class="c"><small>להפקדה</small><b class="tnum" style="color:${toDep>0?'var(--warn)':'var(--good)'}">${money(toDep)}</b></div>`;
+}
+function saveEntry(orig){
+  const d=document.getElementById('f_date').value; if(!d)return;
+  const row={date:d,weekday:weekday(d),hebrew:hebrew(d),event:document.getElementById('f_event').value||(SEED.calendar.find(c=>c.date===d)||{}).event||null,notes:document.getElementById('f_notes').value||null};
+  NUMF.forEach(([k])=>{const v=document.getElementById('f_'+k).value;row[k]=v===''?null:N(v);});
+  S.journal=S.journal.filter(x=>x.date!==d&&x.date!==orig); S.journal.push(row); save(); closeModal(); render(); toast('היום נשמר');
+}
+function openTask(id){
+  const t=id?S.tasks.find(x=>x.id===id):{status:'מתוכנן',priority:'רגילה'};
+  const opt=(arr,v)=>arr.map(o=>`<option ${o===v?'selected':''}>${o}</option>`).join('');
+  modal(id?'עריכת משימה':'משימה חדשה',
+    `<div style="display:grid;gap:11px"><div><label class="lbl">שם המשימה</label><input id="t_title" value="${t.title||''}"></div>
+     <div class="fgrid"><div><label class="lbl">תחום</label><select id="t_cat"><option value=""></option>${opt(['שיווק','תפריט','תפעול','כספים','ספקים','שירות','עובדים','כשרות','מכירות','אסטרטגיה'],t.category)}</select></div>
+       <div><label class="lbl">אחראי</label><input id="t_owner" value="${t.owner||''}"></div>
+       <div><label class="lbl">סטטוס</label><select id="t_status">${opt(['מתוכנן','בתהליך','בוצע','תקוע'],t.status)}</select></div>
+       <div><label class="lbl">עדיפות</label><select id="t_pri">${opt(['גבוהה','רגילה','נמוכה'],t.priority)}</select></div></div></div>`,
+    `<button class="btn" onclick="saveTask('${id||''}')">${svg('check')} שמירה</button>
+     ${id?`<button class="btn ghost" style="color:var(--bad)" onclick="delTask('${id}')">מחיקה</button>`:''}`);
+}
+function saveTask(id){const g=k=>document.getElementById(k).value; if(!g('t_title'))return;
+  const o={title:g('t_title'),category:g('t_cat')||null,owner:g('t_owner')||null,status:g('t_status'),priority:g('t_pri')};
+  if(id){Object.assign(S.tasks.find(x=>x.id===id),o);}else{o.id='tk'+Date.now();S.tasks.unshift(o);}
+  save();closeModal();render();toast('נשמר');}
+function delTask(id){S.tasks=S.tasks.filter(x=>x.id!==id);save();closeModal();render();toast('נמחק');}
+function toggleTask(id){const t=S.tasks.find(x=>x.id===id);t.status=t.status==='בוצע'?'מתוכנן':'בוצע';save();render();}
+function openDish(id){
+  const mi=id?S.menu.find(x=>x.id===id):{status:'רעיון'};
+  const opt=(arr,v)=>arr.map(o=>`<option ${o===v?'selected':''}>${o}</option>`).join('');
+  modal(id?'עריכת מנה':'מנה חדשה',
+    `<div style="display:grid;gap:11px"><div><label class="lbl">שם המנה</label><input id="d_name" value="${mi.name||''}"></div>
+     <div class="fgrid"><div><label class="lbl">קטגוריה</label><input id="d_cat" value="${mi.category||''}"></div>
+       <div><label class="lbl">סטטוס</label><select id="d_status">${opt(['רעיון','בבדיקה','בפיילוט','פעיל','ירד'],mi.status)}</select></div>
+       <div><label class="lbl">מחיר מכירה (₪)</label><input type="number" id="d_price" value="${mi.price??''}" oninput="dishCalc()"></div>
+       <div><label class="lbl">עלות חומרי גלם (₪)</label><input type="number" id="d_cost" value="${mi.cost??''}" oninput="dishCalc()"></div>
+       <div><label class="lbl">מתאים לקמפיין</label><input id="d_camp" value="${mi.campaign||''}"></div></div>
+     <div class="c" id="d_fc" style="background:var(--surface-2);border-radius:10px;padding:10px;text-align:center"></div></div>`,
+    `<button class="btn" onclick="saveDish('${id||''}')">${svg('check')} שמירה</button>
+     ${id?`<button class="btn ghost" style="color:var(--bad)" onclick="delDish('${id}')">מחיקה</button>`:''}`);
+  dishCalc();
+}
+function dishCalc(){const p=N(document.getElementById('d_price').value),c=N(document.getElementById('d_cost').value);
+  const fc=p>0?Math.round(c/p*1000)/10:null,tgt=N(S.settings.food_cost_target),high=fc!=null&&fc>tgt;
+  document.getElementById('d_fc').innerHTML=`<small style="color:var(--mute)">פוד קוסט מחושב</small>
+    <b style="font-size:1.15rem;color:${high?'var(--bad)':'var(--good)'}">${fc!=null?fc+'%':'—'}</b>
+    ${high?`<div style="font-size:.72rem;color:var(--bad)">מעל היעד (${tgt}%)</div>`:''}`;}
+function saveDish(id){const g=k=>document.getElementById(k).value; if(!g('d_name'))return;
+  const o={name:g('d_name'),category:g('d_cat')||null,status:g('d_status'),price:g('d_price')===''?null:N(g('d_price')),cost:g('d_cost')===''?null:N(g('d_cost')),campaign:g('d_camp')||null};
+  if(id){Object.assign(S.menu.find(x=>x.id===id),o);}else{o.id='mn'+Date.now();S.menu.push(o);}
+  save();closeModal();render();toast('נשמר');}
+function delDish(id){S.menu=S.menu.filter(x=>x.id!==id);save();closeModal();render();toast('נמחק');}
+
+function openCash(){modal('עדכון יתרות',
+  `<div style="display:grid;gap:11px">
+    <div><label class="lbl">יתרת בנק (₪)</label><input type="number" id="c_bank" value="${S.cash.bank_balance??''}"></div>
+    <div><label class="lbl">מזומן בקופה (₪)</label><input type="number" id="c_reg" value="${S.cash.cash_in_register??''}"></div>
+    <div><label class="lbl">תשלומים פתוחים לספקים (₪)</label><input type="number" id="c_sup" value="${S.cash.open_supplier_payments??''}"></div></div>`,
+  `<button class="btn" onclick="saveCash()">${svg('check')} שמירה</button>`);}
+function saveCash(){const g=id=>document.getElementById(id).value;
+  S.cash={bank_balance:g('c_bank')===''?null:N(g('c_bank')),cash_in_register:g('c_reg')===''?null:N(g('c_reg')),open_supplier_payments:g('c_sup')===''?null:N(g('c_sup'))};
+  save();closeModal();render();toast('היתרות עודכנו');}
+
+function openLead(id){const l=id?S.leads.find(x=>x.id===id):{stage:'אותר',letter:false};const opt=(a,v)=>a.map(o=>`<option ${o===v?'selected':''}>${o}</option>`).join('');
+  modal(id?'עריכת לקוח':'לקוח חדש',
+   `<div style="display:grid;gap:11px"><div><label class="lbl">שם העסק / מוסד</label><input id="l_name" value="${l.name||''}"></div>
+    <div class="fgrid"><div><label class="lbl">קטגוריה</label><select id="l_cat"><option value=""></option>${opt(['בית ספר','ישיבה','עסק','משרד','מוסד'],l.category)}</select></div>
+      <div><label class="lbl">שלב במשפך</label><select id="l_stage">${opt(STAGES,l.stage)}</select></div>
+      <div><label class="lbl">איש קשר</label><input id="l_contact" value="${l.contact||''}"></div>
+      <div><label class="lbl">טלפון</label><input id="l_phone" value="${l.phone||''}"></div>
+      <div><label class="lbl">מנת טעימה</label><input id="l_tasting" value="${l.tasting||''}"></div></div>
+    <label style="display:flex;gap:8px;align-items:center;font-size:.86rem"><input type="checkbox" id="l_letter" ${l.letter?'checked':''} style="width:auto"> צורף מכתב אישי</label></div>`,
+   `<button class="btn" onclick="saveLead('${id||''}')">${svg('check')} שמירה</button>${id?`<button class="btn ghost" style="color:var(--bad)" onclick="delLead('${id}')">מחיקה</button>`:''}`);}
+function saveLead(id){const g=x=>document.getElementById(x).value;if(!g('l_name'))return;
+  const o={name:g('l_name'),category:g('l_cat')||null,stage:g('l_stage'),contact:g('l_contact')||null,phone:g('l_phone')||null,tasting:g('l_tasting')||null,letter:document.getElementById('l_letter').checked};
+  if(id){Object.assign(S.leads.find(x=>x.id===id),o);}else{o.id='ld'+Date.now();S.leads.unshift(o);}save();closeModal();render();toast('נשמר');}
+function delLead(id){S.leads=S.leads.filter(x=>x.id!==id);save();closeModal();render();toast('נמחק');}
+
+function openEmp(id){const e=id?S.employees.find(x=>x.id===id):{status:'פעיל'};const opt=(a,v)=>a.map(o=>`<option ${o===v?'selected':''}>${o}</option>`).join('');
+  modal(id?'עריכת עובד':'עובד חדש',
+   `<div style="display:grid;gap:11px"><div><label class="lbl">שם</label><input id="e_name" value="${e.name||''}"></div>
+    <div class="fgrid"><div><label class="lbl">תפקיד</label><select id="e_role"><option value=""></option>${opt(['מנהל משמרת','טבח','פיצייה','מלצר','משלוחים','קופה','עזר מטבח'],e.role)}</select></div>
+      <div><label class="lbl">סטטוס</label><select id="e_status">${opt(['פעיל','בהשהיה','סיים'],e.status)}</select></div>
+      <div><label class="lbl">עלות שעתית (₪)</label><input type="number" id="e_cost" value="${e.cost??''}"></div>
+      <div><label class="lbl">עלות מעסיק לשעה (₪)</label><input type="number" id="e_emp" value="${e.employer??''}"></div></div></div>`,
+   `<button class="btn" onclick="saveEmp('${id||''}')">${svg('check')} שמירה</button>${id?`<button class="btn ghost" style="color:var(--bad)" onclick="delEmp('${id}')">מחיקה</button>`:''}`);}
+function saveEmp(id){const g=x=>document.getElementById(x).value;if(!g('e_name'))return;
+  const o={name:g('e_name'),role:g('e_role')||null,status:g('e_status'),cost:g('e_cost')===''?null:N(g('e_cost')),employer:g('e_emp')===''?null:N(g('e_emp'))};
+  if(id){Object.assign(S.employees.find(x=>x.id===id),o);}else{o.id='em'+Date.now();S.employees.push(o);}save();closeModal();render();toast('נשמר');}
+function delEmp(id){S.employees=S.employees.filter(x=>x.id!==id);S.shifts=S.shifts.filter(s=>s.emp!==id);save();closeModal();render();toast('נמחק');}
+
+function openShift(date){const opt=S.employees.map(e=>`<option value="${e.id}">${e.name}</option>`).join('');
+  modal('הוספת משמרת · '+gregS(date),
+   `<div style="display:grid;gap:11px"><div><label class="lbl">עובד</label><select id="sh_emp"><option value="">לא שובץ</option>${opt}</select></div>
+    <div class="fgrid"><div><label class="lbl">משמרת</label><select id="sh_type"><option>בוקר</option><option>צהריים</option><option selected>ערב</option></select></div>
+      <div><label class="lbl">שעות מתוכננות</label><input type="number" id="sh_hours" value="8"></div></div></div>`,
+   `<button class="btn" onclick="saveShift('${date}')">${svg('check')} הוספה</button>`);}
+function saveShift(date){S.shifts.push({id:'sh'+Date.now(),date,emp:document.getElementById('sh_emp').value||null,type:document.getElementById('sh_type').value,hours:N(document.getElementById('sh_hours').value)});
+  save();closeModal();render();toast('משמרת נוספה');}
+function delShift(id){S.shifts=S.shifts.filter(x=>x.id!==id);save();render();}
+
+/* ---------- render ---------- */
+function go(t){TAB=t;render();window.scrollTo(0,0);}
+window.go=go;
+function render(){
+  const t=todayISO();
+  document.getElementById('tGreg').textContent=weekday(t)+' · '+gregD(t);
+  document.getElementById('tHeb').textContent=hebrew(t);
+  const label=(TABS.find(x=>x[0]===TAB)||[])[1]||'';
+  const pt=document.getElementById('ptitle');pt.textContent=label;
+  document.getElementById('sidenav').innerHTML=TABS.map(([id,lbl,ic])=>
+    `<button class="navitem ${TAB===id?'on':''}" onclick="go('${id}')">${svg(ic)}<span>${lbl}</span></button>`).join('');
+  document.getElementById('tabbar').innerHTML=TABS.map(([id,lbl,ic])=>
+    `<button class="tab ${TAB===id?'on':''}" onclick="go('${id}')">${svg(ic)}${lbl}</button>`).join('');
+  const scr={dash:screenDash,journal:screenJournal,cashflow:screenCashflow,calendar:screenCalendar,tasks:screenTasks,
+    leads:screenLeads,menu:screenMenu,reports:screenReports,employees:screenEmployees,zreport:screenZreport,settings:screenSettings}[TAB];
+  document.getElementById('main').innerHTML=scr();
+}
+let toastT;function toast(m){const el=document.getElementById('toast');el.textContent=m;el.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>el.classList.remove('show'),1800);}
+window.openEntry=openEntry;window.saveEntry=saveEntry;window.onDate=onDate;window.liveCalc=liveCalc;
+window.openTask=openTask;window.saveTask=saveTask;window.delTask=delTask;window.toggleTask=toggleTask;
+window.openDish=openDish;window.saveDish=saveDish;window.delDish=delDish;window.dishCalc=dishCalc;
+window.closeModal=closeModal;window.resetAll=resetAll;
+window.openCash=openCash;window.saveCash=saveCash;window.openLead=openLead;window.saveLead=saveLead;window.delLead=delLead;
+window.openEmp=openEmp;window.saveEmp=saveEmp;window.delEmp=delEmp;window.openShift=openShift;window.saveShift=saveShift;window.delShift=delShift;
+window.saveSettings=saveSettings;window.sendZ=sendZ;window.render=render;
+render();
+</script>

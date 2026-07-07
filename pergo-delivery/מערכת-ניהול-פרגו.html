@@ -240,6 +240,9 @@ const IC = {
   beaker:'<path d="M9 3h6M10 3v5l-5 9a2 2 0 0 0 2 3h10a2 2 0 0 0 2-3l-5-9V3"/><path d="M6.5 14h11"/>',
   file:'<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/>',
   bulb:'<path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.1V17h6v-.2c0-.8.4-1.6 1-2.1A7 7 0 0 0 12 2z"/>',
+  coins:'<circle cx="8" cy="8" r="6"/><path d="M18.1 10.9A6 6 0 1 1 10.9 18.1"/><path d="M7 6h1v4M16.7 14h1v4"/>',
+  sliders:'<path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/>',
+  flag:'<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1zM4 22v-7"/>',
   users:'<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/>',
   mail:'<rect x="2" y="4" width="20" height="16" rx="2"/><path d="M2 7l10 6 10-6"/>',
   gear:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1V21a2 2 0 1 1-4 0v-.1A1.6 1.6 0 0 0 6.6 19.4a2 2 0 1 1-2.8-2.8l.1-.1A1.6 1.6 0 0 0 3 13.6H3a2 2 0 1 1 0-4h.1A1.6 1.6 0 0 0 4.6 6.6a2 2 0 1 1 2.8-2.8l.1.1A1.6 1.6 0 0 0 10 3V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 2.7 1.1l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8"/>'
@@ -250,13 +253,18 @@ const svg = (k,cls='') => `<svg class="${cls}" viewBox="0 0 24 24" fill="none" s
 const LS='pergo_mgmt_v1';
 function defaults(){ return {
   journal:structuredClone(SEED.journal),tasks:structuredClone(SEED.tasks),menu:structuredClone(SEED.menu),
-  settings:structuredClone(SEED.settings),cash:structuredClone(SEED.cash),
+  settings:{...structuredClone(SEED.settings),assumed_food_cost:37,lead_value:1200,labor_target_pct:28},cash:structuredClone(SEED.cash),
   leads:[
     {id:'ld1',name:'ישיבת צור הדסה',category:'ישיבה',contact:'הרב כהן',role:'ראש ישיבה',phone:'050-1234567',tasting:'מגש פיצות',letter:true,stage:'שיחת מעקב',notes:null},
     {id:'ld2',name:'בית ספר הראל',category:'בית ספר',contact:'המזכירה',role:null,phone:null,tasting:'סלמון',letter:false,stage:'אותר',notes:null}
   ],
   employees:seedEmployees(),shifts:seedShifts(),shiftApps:seedApps(),
-  evaluations:[],feasDraft:null,analyses:[],empEvents:seedEmpEvents(),viewer:{mode:'manager',empId:null},weekOffset:0,_v:2 }; }
+  evaluations:[],feasDraft:null,analyses:[],empEvents:seedEmpEvents(),decisions:seedDecisions(),viewer:{mode:'manager',empId:null},weekOffset:0,_v:3 }; }
+function seedDecisions(){return [
+  {id:'dc1',title:'העלאת מחיר הסלמון ב-4₪',status:'נמדד',date:'2026-05-20',invest:0,expReturn:12000,measured:14400,verdict:'הצלחה',note:'לא הורגש בביקוש — התוספת נטו כולה לרווח.'},
+  {id:'dc2',title:'קמפיין ממוקד ליום שני (יום חלש)',status:'בביצוע',date:'2026-06-28',invest:1500,expReturn:8000,measured:null,verdict:null,note:'ממתין למדידה — נבדוק מחזור ימי שני בעוד שבועיים.'},
+  {id:'dc3',title:'הוספת מנת פסטה חלבית לתפריט',status:'רעיון',date:'2026-07-01',invest:2000,expReturn:9000,measured:null,verdict:null,note:'טרם עבר בדיקת מנה — להריץ ב"בדיקת מנה" לפני החלטה.'}
+];}
 function seedEmpEvents(){return [
   {id:'ee1',empId:'em3',type:'איחור',severity:'בינונית',desc:'איחור של 20 דקות למשמרת ערב',date:'2026-06-28'},
   {id:'ee2',empId:'em3',type:'תלונה',severity:'גבוהה',desc:'תלונת לקוח על שירות לא אדיב',date:'2026-07-02'},
@@ -281,7 +289,8 @@ function seedApps(){const wk=weekDates(0);return [
   {id:'a5',shiftId:'sh_'+wk[0]+'_e',empId:'em2',role:'מלצרית',status:'pending'},
   {id:'a6',shiftId:'sh_'+wk[1]+'_e',empId:'em4',role:'מארחת',status:'approved'}];}
 function load(){ const base=defaults(); try{const r=localStorage.getItem(LS); if(r){const p=JSON.parse(r),m={...base,...p};
-  if(p._v!==2){m.employees=base.employees;m.shifts=base.shifts;m.shiftApps=base.shiftApps;m.viewer=base.viewer;m.weekOffset=0;m._v=2;}
+  if(p._v!==2&&p._v!==3){m.employees=base.employees;m.shifts=base.shifts;m.shiftApps=base.shiftApps;m.viewer=base.viewer;m.weekOffset=0;}
+  if(p._v!==3){m.decisions=Array.isArray(p.decisions)?p.decisions:base.decisions;m.settings={...base.settings,...(p.settings||{})};m._v=3;}
   return m;}}catch(e){} return base; }
 let S=load();
 function save(){ try{localStorage.setItem(LS,JSON.stringify(S));}catch(e){} }
@@ -391,7 +400,8 @@ function bars(data,color,fmt){
 }
 
 /* ---------- screens ---------- */
-const TABS=[['advisor','היועץ העסקי','bulb'],['dash','דשבורד','dash'],['journal','יומן','journal'],['cashflow','תזרים','cash'],
+const TABS=[['advisor','מנהל הבוקר','flag'],['money','כסף','coins'],['sim','סימולטור','sliders'],['decisions','החלטות','bulb'],
+  ['dash','דשבורד','dash'],['journal','יומן','journal'],['cashflow','תזרים','cash'],
   ['calendar','לוח שנה','calendar'],['tasks','משימות','tasks'],['leads','לקוחות','target'],
   ['menu','תפריט','menu'],['feas','בדיקת מנה','beaker'],['reports','דוחות','reports'],['employees','משמרות','users'],
   ['zreport','דוח Z','mail'],['docs','ייבוא מסמכים','file'],['settings','הגדרות','gear']];
@@ -408,50 +418,203 @@ function employeeAdvice(evts){
   const summary=[neg&&`${neg} תלונות`,late&&`${late} איחורים`,cancel&&`${cancel} ביטולים`,praise&&`${praise} שבחים`].filter(Boolean).join(' · ');
   return {action,level,summary};
 }
-function advisor(){
-  const m=metrics(),c=cashStat(),ts=taskSum(),ev=nextEvent(),ws=weekStats(weekDates(0)),tgt=N(S.settings.food_cost_target),byId=empById();
-  const P=(arr,level,icon,text,route)=>arr.push({level,icon,text,route});
-  const urgent=[],expenses=[],employees=[],opps=[],events=[];
-  if(m.pacePct<0.85)P(urgent,'bad','trend',`המחזור בקצב ${Math.round(m.pacePct*100)}% מהיעד — צריך דחיפת מכירות/קמפיין.`,['journal','month','מחזור החודש']);
-  if(ws.missRoles&&ws.missRoles['טבח'])P(urgent,'bad','users',`חסר טבח ל-${ws.missRoles['טבח']} משמרות השבוע — לאייש בדחיפות.`,['employees','week','חוסרי עובדים']);
-  if(ts.stuck)P(urgent,'bad','alert',`${ts.stuck} משימות תקועות ממתינות לטיפול.`,['tasks','תקוע','משימות תקועות']);
-  if(c.depWarn)P(urgent,'warn','cash',`${money(c.toDep)} מזומן טרם הופקד לבנק.`,['cashflow','deposit','מזומן להפקדה']);
-  if(c.diffAlert)P(urgent,'bad','alert','אי-התאמה בין אמצעי התשלום למחזור — לבדוק.',['journal','diff','הפרש אמצעי תשלום']);
-  S.analyses.forEach(a=>{if(a.type==='pl'&&a.rec)a.rec.forEach(r=>P(expenses,'warn','receipt',r,['docs',null,'ייבוא מסמכים']));
-    if(a.type==='purch'&&a.pct>tgt)P(expenses,'bad','receipt',`פוד קוסט ${a.pct}% מעל היעד (${tgt}%) לפי דוח הקניות.`);
-    if(a.type==='supp'&&a.rec)a.rec.forEach(r=>P(expenses,'warn','receipt',r));});
-  S.menu.forEach(mi=>{const p=N(mi.price),co=N(mi.cost),fc=p>0?Math.round(co/p*1000)/10:null;if(fc!=null&&fc>tgt&&mi.status==='פעיל')P(expenses,'bad','utensils',`מנה "${mi.name}" — פוד קוסט ${fc}% (מעל ${tgt}%), פחות רווחית.`,['menu','all','תפריט']);});
-  const groups={};S.empEvents.forEach(e=>{(groups[e.empId]=groups[e.empId]||[]).push(e);});
-  Object.entries(groups).forEach(([id,evts])=>{const adv=employeeAdvice(evts);if(adv.action){const nm=byId[id]?byId[id].name:'עובד';P(employees,adv.level,'users',`${nm}: ${adv.summary} — מומלץ ${adv.action}.`,['employees','week',nm]);}});
-  if(m.avgOrder&&m.avgOrder<N(S.settings.avg_order_target))P(opps,'warn','trend',`ממוצע הזמנה ${money(m.avgOrder)} מתחת ליעד (${money(S.settings.avg_order_target)}) — להציע תוספות/שדרוגים.`,['journal','month','ממוצע הזמנה']);
+/* ---------- מנוע כסף (money engine) ---------- */
+const EVENT_UPLIFT={'בין המצרים':9000,'תשעת הימים':7000,'ראש השנה':16000,'יום כיפור':2000,'סוכות':12000,'חנוכה':11000,'פורים':8000,'פסח':15000,'שבועות':14000,'ט״ו באב':6000,'סעודה רביעית':2500};
+function eventUplift(name){name=(name||'').trim();return EVENT_UPLIFT[name]||5000;}
+function latestFoodCost(){
+  const pa=[...(S.analyses||[])].reverse().find(a=>a.type==='purch'&&Number.isFinite(+a.pct));
+  if(pa)return {pct:N(pa.pct),src:'דוח קניות'};
+  return {pct:N(S.settings.assumed_food_cost)||37,src:'הערכה'};}
+function moneyModel(){
+  const m=metrics(),c=cashStat(),ws=weekStats(weekDates(0)),st=S.settings;
+  const fcTgt=N(st.food_cost_target),fc=latestFoodCost(),aoTgt=N(st.avg_order_target);
+  const leadVal=N(st.lead_value)||1200,laborTgt=N(st.labor_target_pct)||28,proj=m.pace||m.cum;
+  const leak=[],earn=[];
+  const L=(title,amount,sub,action,route)=>{if(amount>0)leak.push({side:'leak',title,amount:Math.round(amount),sub,action,route});};
+  const E=(title,amount,sub,action,route)=>{if(amount>0)earn.push({side:'earn',title,amount:Math.round(amount),sub,action,route});};
+  /* --- כסף שבורח --- */
+  if(fc.pct>fcTgt)L('פוד קוסט גבוה מהיעד',(fc.pct-fcTgt)/100*proj,
+    `הפוד קוסט ${fc.pct}% מול יעד ${fcTgt}% (${fc.src}). כל אחוז = ${money(proj/100)} בחודש.`,
+    '3 פעולות: משא-ומתן עם הספק המוביל, צמצום בזבוז במטבח, ותמחור מחדש של 2 מנות חריגות.',['docs',null,'ייבוא מסמכים']);
+  const unprof=S.menu.filter(mi=>mi.status==='פעיל'&&N(mi.price)>0&&N(mi.cost)/N(mi.price)*100>fcTgt);
+  if(unprof.length)L(`${unprof.length} מנות מפסידות רווח`,unprof.length*450,
+    `מנות פעילות עם פוד קוסט מעל ${fcTgt}%: ${unprof.slice(0,3).map(x=>x.name).join(', ')}${unprof.length>3?'…':''}.`,
+    'תמחור מחדש או שדרוג מנה — כל מנה מחזירה ~450₪ בחודש.',['menu','all','מנות לא רווחיות']);
+  const monthlyLabor=ws.cost*4.33,laborPct=proj>0?monthlyLabor/proj*100:0;
+  if(laborPct>laborTgt&&proj>0)L('עלות שכר מעל היעד',(laborPct-laborTgt)/100*proj,
+    `שכר משוער ${Math.round(laborPct)}% מהמחזור מול יעד ${laborTgt}%.`,
+    'לאזן סידור עבודה: לצמצם משמרת חלשה אחת בשבוע או לשלב תפקידים.',['employees','week','עלות שכר שבועית']);
+  const missCook=(ws.missRoles&&ws.missRoles['טבח'])||0;
+  if(missCook)L('חוסר טבח פוגע בכושר הייצור',missCook*m.avgDaily*0.25,
+    `${missCook} משמרות ללא טבח — כ-25% מכושר הייצור אובד באותן משמרות.`,
+    `לאייש היום — כל משמרת מלאה מחזירה ~${money(m.avgDaily*0.25)} מכירות.`,['employees','week','חוסרי עובדים בשבוע']);
+  if(c.diffAlert)L('אי-התאמה באמצעי תשלום',Math.abs(c.diff)*12,
+    `הפרש ${money(Math.abs(c.diff))} בין המחזור לאמצעי התשלום — עלול לחזור מדי חודש.`,
+    'להצליב קופה מול דוחות אשראי/מזומן ולאתר את מקור הפער.',['journal','diff','הפרש אמצעי תשלום']);
+  /* --- כסף שאפשר להרוויח --- */
+  if(m.pace<m.target){const gap=m.target-m.pace,perDay=m.left?gap/m.left:gap,dishes=aoTgt?Math.ceil(perDay/aoTgt):null;
+    E('לסגור את הפער ליעד המחזור',gap,`בקצב הנוכחי חסרים ${money(gap)} כדי לעמוד ביעד החודשי.`,
+      dishes?`למכור עוד ~${dishes} הזמנות ליום (${money(perDay)}) עד סוף החודש — אפסייל, יום חלש, קמפיין.`:'לדחוף מכירות בימים שנותרו.',['journal','month','מחזור מול יעד']);}
+  const ev=nextEvent(null,30);
+  if(ev)E(`${ev.active?'אירוע פעיל':'בעוד '+ev.days+' ימים'}: ${ev.event}`,eventUplift(ev.event),
+    `קמפיין ממוקד לאירוע יכול להוסיף ~${money(eventUplift(ev.event))} למחזור.`,
+    (ev.action||'להכין קמפיין ומלאי מתאים')+(ev.owner?` (אחראי: ${ev.owner})`:''),['calendar','event','אירוע עסקי קרוב']);
   const idx=s=>STAGES.indexOf(s),followups=S.leads.filter(l=>idx(l.stage)>=idx('טעימה נשלחה')&&idx(l.stage)<idx('הזמנה ראשונה')).length;
-  if(followups)P(opps,'good','target',`${followups} לקוחות פוטנציאליים אחרי טעימה — לקדם לשיחת מעקב והזמנה.`,['leads','all','לקוחות פוטנציאליים']);
-  const byW={};S.journal.filter(e=>N(e.revenue)>0).forEach(e=>{const w=e.weekday||weekday(e.date);(byW[w]=byW[w]||[]).push(N(e.revenue));});
-  let weakDay=null,weakAvg=Infinity;Object.entries(byW).forEach(([w,arr])=>{const a=arr.reduce((s,x)=>s+x,0)/arr.length;if(a<weakAvg){weakAvg=a;weakDay=w;}});
-  if(weakDay&&Object.keys(byW).length>=2)P(opps,'good','trend',`יום ${weakDay} חלש יחסית (ממוצע ${money(weakAvg)}) — קמפיין ממוקד יכול לחזק אותו.`);
-  if(ev)P(events,ev.days<=7?'warn':'good','calendar',`${ev.active?'עכשיו':'בעוד '+ev.days+' ימים'}: ${ev.event}${ev.action?' — '+ev.action:''}${ev.owner?' (אחראי: '+ev.owner+')':''}`,['calendar','event','אירוע עסקי קרוב']);
-  upcomingEvents(30).slice(1,3).forEach(e=>P(events,'good','calendar',`בעוד ${e.days} ימים: ${e.event}${e.action?' — '+e.action:''}`,['calendar','event','לוח שנה']));
-  urgent.sort((a,b)=>(a.level==='bad'?0:1)-(b.level==='bad'?0:1));
-  return {urgent:urgent.slice(0,3),expenses,employees,opps,events};
-}
-function advItem(it){const col=it.level==='bad'?'var(--bad)':it.level==='good'?'var(--good)':'var(--warn)',bg=it.level==='bad'?'var(--bad-soft)':it.level==='good'?'var(--good-soft)':'var(--warn-soft)';
-  return `<div class="card" style="padding:12px 14px;display:flex;align-items:center;gap:12px;border-inline-start:4px solid ${col}${it.route?';cursor:pointer':''}" ${it.route?`onclick="drill('${it.route[0]}','${it.route[1]}','${it.route[2]}')"`:''}>
-    <div style="width:34px;height:34px;border-radius:9px;background:${bg};color:${col};display:grid;place-items:center;flex:0 0 auto">${svg(it.icon)}</div>
-    <div style="flex:1;min-width:0;font-size:.9rem;font-weight:500">${it.text}</div>${it.route?`<span style="color:${col};font-weight:800">›</span>`:''}</div>`;}
-function advSection(title,items,empty){return `<div class="sec"><h2>${title}</h2>${items.length?`<div class="grid" style="gap:9px">${items.map(advItem).join('')}</div>`:`<div class="card" style="padding:12px 14px;color:var(--mute);font-size:.86rem">${empty}</div>`}</div>`;}
-function screenAdvisor(){const a=advisor(),t=todayISO(),total=a.urgent.length+a.expenses.length+a.employees.length+a.opps.length;
-  return `<div class="card pad" style="max-width:860px;margin-bottom:18px;background:linear-gradient(135deg,var(--accent),var(--accent-ink));color:#fff;border:none">
+  if(followups)E(`${followups} לקוחות פוטנציאליים לסגירה`,followups*leadVal,
+    `אחרי טעימה, לפני הזמנה ראשונה. ערך ממוצע ללקוח: ${money(leadVal)}.`,
+    'שיחת מעקב וסגירת הזמנה ראשונה עוד השבוע.',['leads','all','לקוחות פוטנציאליים']);
+  if(m.avgOrder&&m.avgOrder<aoTgt){const mtx=m.n?m.tx/m.n*m.dim:m.tx;
+    E('להעלות ממוצע הזמנה',(aoTgt-m.avgOrder)*mtx,
+      `ממוצע ${money(m.avgOrder)} מול יעד ${money(aoTgt)}. פער ${money(aoTgt-m.avgOrder)} × ~${nf(mtx)} הזמנות בחודש.`,
+      'אפסייל קבוע: תוספת / שתייה / קינוח בכל הזמנה.',['journal','month','ממוצע הזמנה']);}
+  const totalLeak=leak.reduce((s,x)=>s+x.amount,0),totalEarn=earn.reduce((s,x)=>s+x.amount,0);
+  leak.sort((a,b)=>b.amount-a.amount);earn.sort((a,b)=>b.amount-a.amount);
+  return {leak,earn,totalLeak,totalEarn};}
+function morningModel(){
+  const mm=moneyModel(),c=cashStat(),ts=taskSum(),byId=empById();
+  const items=[...mm.leak,...mm.earn];
+  if(c.depWarn)items.push({side:'leak',title:'מזומן לא הופקד לבנק',amount:Math.round(c.toDep),
+    sub:`${money(c.toDep)} יושבים בקופה במקום בבנק — כסף שלא עובד וחשוף.`,action:'להפקיד היום.',route:['cashflow','deposit','מזומן להפקדה']});
+  if(ts.stuck)items.push({side:'leak',title:`${ts.stuck} משימות תקועות`,amount:0,
+    sub:'משימות תקועות עלולות לעכב הכנסה או לגרום לקנס.',action:'לשחרר את החסם או להעביר אחראי.',route:['tasks','תקוע','משימות תקועות']});
+  const groups={};S.empEvents.forEach(e=>{(groups[e.empId]=groups[e.empId]||[]).push(e);});
+  Object.entries(groups).forEach(([id,evts])=>{const adv=employeeAdvice(evts);if(adv.action){const nm=byId[id]?byId[id].name:'עובד';
+    items.push({side:'leak',title:`עובד לטיפול: ${nm}`,amount:0,sub:`${adv.summary} — שירות לקוי פוגע בהכנסה חוזרת.`,action:adv.action+'.',route:['employees','week',nm]});}});
+  items.sort((a,b)=>b.amount-a.amount);
+  return {items,top:items.slice(0,3),totalLeak:mm.totalLeak,totalEarn:mm.totalEarn};}
+function mItem(it){
+  const earn=it.side==='earn',col=earn?'var(--good)':'var(--bad)',bg=earn?'var(--good-soft)':'var(--bad-soft)';
+  const amt=it.amount>0?`${earn?'+':'−'}${money(it.amount)} / חודש`:'';
+  return `<div class="card" style="padding:13px 15px;border-inline-start:4px solid ${col}${it.route?';cursor:pointer':''}" ${it.route?`onclick="drill('${it.route[0]}','${it.route[1]}','${it.route[2]}')"`:''}>
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <b style="font-size:.98rem;flex:1;min-width:0">${it.title}</b>
+      ${amt?`<span class="chip" style="background:${bg};color:${col};font-weight:800;font-size:.88rem">${amt}</span>`:''}</div>
+    <div style="font-size:.85rem;color:var(--dim);margin-top:5px">${it.sub}</div>
+    <div style="font-size:.86rem;margin-top:8px;background:var(--surface-2);border-radius:9px;padding:8px 11px"><b style="color:${col}">מה לעשות:</b> ${it.action}</div>
+    ${it.route?`<div style="font-size:.72rem;color:var(--accent);font-weight:700;margin-top:7px">למקור ›</div>`:''}</div>`;}
+function screenAdvisor(){
+  const mo=morningModel(),t=todayISO(),name=(S.settings.partners&&S.settings.partners[0])||'מנהל';
+  const h=new Date().getHours(),greet=h<12?'בוקר טוב':h<18?'צהריים טובים':'ערב טוב';
+  const box=(lbl,val)=>`<div style="flex:1;min-width:150px;background:rgba(255,255,255,.13);border-radius:12px;padding:11px 13px">
+    <div style="font-size:.75rem;opacity:.85">${lbl}</div><div style="font-size:1.3rem;font-weight:800">${money(val)}</div></div>`;
+  return `<div class="card pad" style="max-width:880px;margin-bottom:16px;background:linear-gradient(135deg,var(--accent),var(--accent-ink));color:#fff;border:none">
     <div style="display:flex;align-items:center;gap:12px">
-      <div style="width:44px;height:44px;border-radius:12px;background:rgba(255,255,255,.2);display:grid;place-items:center">${svg('bulb','ic22')}</div>
-      <div><div style="font-size:1.3rem;font-weight:800">בוקר טוב 👋</div><div style="font-size:.85rem;opacity:.9">${weekday(t)} · ${gregD(t)} · ${hebrew(t)}</div></div></div>
-    <div style="font-size:.92rem;margin-top:12px;opacity:.95">${total?`יש <b>${total}</b> דברים שכדאי לשים לב אליהם היום. הכי דחוף למטה.`:'הכל נראה תקין היום — אין התראות דחופות. 👍'}</div></div>
-  <div style="max-width:860px">
-  ${a.urgent.length?`<div class="sec"><h2>🔴 הכי דחוף עכשיו</h2><div class="grid" style="gap:9px">${a.urgent.map(advItem).join('')}</div></div>`:''}
-  ${advSection('💸 חריגות בהוצאות ומנות',a.expenses,'אין חריגות — נתחו דוח רווח והפסד/קניות ב"ייבוא מסמכים".')}
-  ${advSection('👥 עובדים לטיפול',a.employees,'אין עובדים הדורשים טיפול כרגע.')}
-  ${advSection('📈 הזדמנויות להגדלת מחזור',a.opps,'—')}
-  ${advSection('📅 לקראת אירועים וחגים',a.events,'אין אירוע מיוחד בקרוב.')}
-  <div class="foot">היועץ מבוסס-כללים על הנתונים שלך · כל המלצה לחיצה מובילה למקור · אינו מחליט במקומך</div></div>`;}
+      <div style="width:46px;height:46px;border-radius:13px;background:rgba(255,255,255,.2);display:grid;place-items:center">${svg('flag','ic22')}</div>
+      <div><div style="font-size:1.35rem;font-weight:800">${greet}, ${name} 👋</div>
+      <div style="font-size:.85rem;opacity:.9">${weekday(t)} · ${gregD(t)} · ${hebrew(t)}</div></div></div>
+    <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap">${box('💸 כסף שבורח החודש',mo.totalLeak)}${box('💰 כסף שאפשר להרוויח',mo.totalEarn)}</div></div>
+  <div style="max-width:880px">
+    <div class="sec"><h2>⏱️ אם יש לך רק שעה אחת היום — עשה את 3 אלו</h2>
+      <div class="grid" style="gap:10px">${mo.top.map(mItem).join('')||'<div class="card" style="padding:14px;color:var(--mute)">אין פעולות דחופות — הכל נראה תקין. 👍</div>'}</div></div>
+    ${mo.items.length>3?`<div class="sec"><h2>שאר ההזדמנויות והדליפות</h2>
+      <div class="grid" style="gap:10px">${mo.items.slice(3).map(mItem).join('')}</div></div>`:''}
+    <div class="foot">מנהל הבוקר ממיר את הנתונים שלך לכסף ולפעולות · מדורג לפי השפעה כספית · אינו מחליט במקומך</div></div>`;}
+
+/* ---------- כסף שבורח / כסף שאפשר להרוויח ---------- */
+function screenMoney(){
+  const mm=moneyModel();
+  const empty=t=>`<div class="card" style="padding:14px;color:var(--mute);font-size:.88rem">${t}</div>`;
+  const stat=(lbl,val,col,note)=>`<div style="flex:1;min-width:160px;text-align:center">
+    <div style="font-size:.8rem;color:var(--dim)">${lbl}</div><div style="font-size:1.55rem;font-weight:800;color:var(--${col})">${money(val)}</div>
+    <div style="font-size:.72rem;color:var(--mute)">${note}</div></div>`;
+  return `<div style="max-width:880px">
+    <div class="card pad" style="margin-bottom:16px;display:flex;gap:14px;flex-wrap:wrap">
+      ${stat('💸 כסף שבורח',mm.totalLeak,'bad','לחודש · '+money(mm.totalLeak*12)+' לשנה')}
+      ${stat('💰 כסף שאפשר להרוויח',mm.totalEarn,'good','פוטנציאל חודשי · '+money(mm.totalEarn*12)+' לשנה')}</div>
+    <div class="sec"><h2>💸 כסף שבורח — לעצור את הדליפות</h2>
+      <div class="grid" style="gap:10px">${mm.leak.length?mm.leak.map(mItem).join(''):empty('אין דליפות מזוהות כרגע — יפה מאוד. 👍')}</div></div>
+    <div class="sec"><h2>💰 כסף שאפשר להרוויח — הזדמנויות</h2>
+      <div class="grid" style="gap:10px">${mm.earn.length?mm.earn.map(mItem).join(''):empty('אין הזדמנויות פתוחות כרגע.')}</div></div>
+    <div class="foot">כל סכום הוא הערכה מבוססת-נתונים לפי מה שהזנת · לחיצה על פריט מובילה למקור לתיקון</div></div>`;}
+
+/* ---------- סימולטור "מה יקרה אם" ---------- */
+function simRow(label,id,val){return `<div style="flex:1;min-width:120px"><label class="lbl">${label}</label><input type="number" id="${id}" value="${val}" oninput="simCalc()"></div>`;}
+function screenSim(){
+  return `<div style="max-width:820px">
+    <div class="card pad" style="margin-bottom:14px;background:var(--surface-2)">
+      <b>סימולטור "מה יקרה אם…"</b>
+      <div style="font-size:.85rem;color:var(--dim);margin-top:4px">שנה מספר — קבל מיד את ההשפעה השנתית בשקלים. הערכות לקבלת החלטה, לא התחייבות.</div></div>
+    <div class="card pad" style="margin-bottom:12px">
+      <h3 style="font-weight:800;margin-bottom:9px">🐟 להעלות מחיר מנה מנצחת (סלמון)</h3>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">${simRow('תוספת למחיר (₪)','sim_a1',4)}${simRow('כמות בחודש','sim_b1',130)}</div>
+      <div id="res1"></div></div>
+    <div class="card pad" style="margin-bottom:12px">
+      <h3 style="font-weight:800;margin-bottom:9px">🍕 להעלות מחיר כל הפיצות</h3>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">${simRow('תוספת למחיר (₪)','sim_a2',3)}${simRow('הזמנות פיצה בחודש','sim_b2',900)}</div>
+      <div id="res2"></div></div>
+    <div class="card pad" style="margin-bottom:12px">
+      <h3 style="font-weight:800;margin-bottom:9px">🧑‍🍳 להוסיף מלצרית במשמרות עומס</h3>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">${simRow('תוספת מכירה למשמרת (₪)','sim_a3',800)}${simRow('משמרות עומס בחודש','sim_b3',8)}${simRow('עלות מלצרית למשמרת (₪)','sim_c3',270)}</div>
+      <div id="res3"></div></div>
+    <div class="card pad" style="margin-bottom:12px">
+      <h3 style="font-weight:800;margin-bottom:9px">✂️ לבטל משמרת עובד ביום חלש</h3>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">${simRow('שעות משמרת','sim_a4',7)}${simRow('עלות לשעה (₪)','sim_b4',40)}${simRow('משמרות בחודש','sim_c4',4)}</div>
+      <div id="res4"></div></div>
+    <div class="foot">כל תרחיש עצמאי · הערכה שנתית לצורך השוואת כדאיות</div></div>`;}
+function simOut(elId,annual,text,good){const el=document.getElementById(elId);if(!el)return;const col=good?'var(--good)':'var(--bad)';
+  el.innerHTML=`<div style="margin-top:11px;background:var(--surface-2);border-radius:11px;padding:11px 13px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+    <span style="font-size:.83rem;color:var(--dim)">${text}</span>
+    <b style="font-size:1.25rem;color:${col};white-space:nowrap">${annual>=0?'+':'−'}${money(Math.abs(annual))} / שנה</b></div>`;}
+function simCalc(){const g=id=>{const el=document.getElementById(id);return el?N(el.value):0;};
+  {const a=g('sim_a1'),b=g('sim_b1');simOut('res1',a*b*12,`תוספת נטו לרווח (המחיר נכנס כולו לרווח): ${money(a*b)} לחודש`,true);}
+  {const a=g('sim_a2'),b=g('sim_b2');simOut('res2',a*b*12,`תוספת רווח משינוי מחיר קטן: ${money(a*b)} לחודש`,true);}
+  {const a=g('sim_a3'),b=g('sim_b3'),c=g('sim_c3'),net=(a-c)*b;simOut('res3',net*12,`רווח נקי חודשי (מכירה פחות עלות): ${money(net)} × 12`,net>=0);}
+  {const a=g('sim_a4'),b=g('sim_b4'),c=g('sim_c4'),sv=a*b*c;simOut('res4',sv*12,`חיסכון שכר שנתי (שים לב לאובדן שירות אפשרי): ${money(sv)} לחודש`,true);}}
+
+/* ---------- מערכת החלטות + ROI ---------- */
+const DEC_STAGES=['רעיון','בבדיקה','בביצוע','נמדד'];
+function roiOf(d){const base=d.measured!=null?N(d.measured):N(d.expReturn),inv=N(d.invest);
+  if(inv<=0)return {roi:null,net:base,base,pure:true};
+  return {roi:Math.round((base-inv)/inv*100),net:base-inv,base,pure:false};}
+function screenDecisions(){
+  const list=S.decisions||[];
+  const sChip=s=>{const i=DEC_STAGES.indexOf(s),c=i>=3?'good':i>=2?'warn':'';return `<span class="chip ${c}">${s}</span>`;};
+  const vChip=v=>v?`<span class="chip ${v==='הצלחה'?'good':v==='כישלון'?'bad':'warn'}">${v==='הצלחה'?'✅ ':v==='כישלון'?'❌ ':''}${v}</span>`:'';
+  const cards=list.map(d=>{const r=roiOf(d);
+    const roiCol=r.pure?'var(--good)':(r.roi>=100?'var(--good)':r.roi>=0?'var(--warn)':'var(--bad)');
+    const steps=DEC_STAGES.map(s=>{const on=DEC_STAGES.indexOf(s)<=DEC_STAGES.indexOf(d.status);
+      return `<span style="font-size:.7rem;padding:2px 8px;border-radius:20px;background:${on?'var(--accent-soft)':'var(--surface-2)'};color:${on?'var(--accent-ink)':'var(--mute)'};font-weight:${on?'700':'500'}">${s}</span>`;}).join('<span style="color:var(--mute);font-size:.7rem"> › </span>');
+    return `<div class="card pad" style="cursor:pointer" onclick="openDecision('${d.id}')">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:7px">
+        <b style="font-size:1.02rem;flex:1;min-width:0">${d.title}</b>${sChip(d.status)}${vChip(d.verdict)}</div>
+      <div style="display:flex;gap:2px;align-items:center;flex-wrap:wrap;margin-bottom:10px">${steps}</div>
+      <div class="comp" style="margin-top:0">
+        <div class="c"><small>השקעה</small><b class="tnum">${money(d.invest)}</b></div>
+        <div class="c"><small>תשואה ${d.measured!=null?'בפועל':'צפויה'}</small><b class="tnum">${money(d.measured!=null?d.measured:d.expReturn)}</b></div>
+        <div class="c"><small>רווח נקי</small><b class="tnum" style="color:${roiCol}">${money(r.net)}</b></div>
+        <div class="c"><small>ROI</small><b class="tnum" style="color:${roiCol}">${r.roi!=null?r.roi+'%':'∞'}</b></div></div>
+      ${d.note?`<div style="font-size:.82rem;color:var(--dim);margin-top:9px">${d.note}</div>`:''}</div>`;}).join('');
+  const totInv=list.reduce((s,d)=>s+N(d.invest),0),totRet=list.reduce((s,d)=>s+N(d.measured!=null?d.measured:d.expReturn),0);
+  return `<div style="max-width:820px">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+      <div style="font-size:.8rem;color:var(--dim)">מחזור החלטה: רעיון → בדיקת כדאיות → ביצוע → מדידה → למידה</div>
+      <button class="btn sm" onclick="openDecision('')">${svg('plus')} החלטה חדשה</button></div>
+    <div class="card pad" style="margin-bottom:14px;display:flex;gap:12px;flex-wrap:wrap;text-align:center">
+      <div style="flex:1;min-width:100px"><div style="font-size:.75rem;color:var(--dim)">סה״כ הושקע</div><div style="font-size:1.25rem;font-weight:800">${money(totInv)}</div></div>
+      <div style="flex:1;min-width:100px"><div style="font-size:.75rem;color:var(--dim)">סה״כ תשואה</div><div style="font-size:1.25rem;font-weight:800;color:var(--good)">${money(totRet)}</div></div>
+      <div style="flex:1;min-width:100px"><div style="font-size:.75rem;color:var(--dim)">ROI כולל</div><div style="font-size:1.25rem;font-weight:800;color:var(--good)">${totInv>0?Math.round((totRet-totInv)/totInv*100)+'%':'—'}</div></div></div>
+    <div class="grid" style="gap:11px">${cards||'<div class="card" style="padding:14px;color:var(--mute)">אין החלטות עדיין. לחץ "החלטה חדשה" כדי לעקוב אחרי כדאיות ותוצאות.</div>'}</div>
+    <div class="foot">כל החלטה נמדדת מול המציאות — כך לומדים מה עובד ומפסיקים לנחש</div></div>`;}
+function openDecision(id){
+  const d=id?S.decisions.find(x=>x.id===id):{status:'רעיון'};
+  const opt=(arr,v)=>arr.map(o=>`<option ${o===v?'selected':''}>${o}</option>`).join('');
+  modal(id?'עריכת החלטה':'החלטה חדשה',
+    `<div style="display:grid;gap:11px"><div><label class="lbl">כותרת ההחלטה</label><input id="dc_title" value="${d.title||''}" placeholder="למשל: העלאת מחיר הסלמון ב-4₪"></div>
+     <div class="fgrid"><div><label class="lbl">שלב</label><select id="dc_status">${opt(DEC_STAGES,d.status)}</select></div>
+       <div><label class="lbl">השקעה נדרשת (₪)</label><input type="number" id="dc_invest" value="${d.invest??''}" placeholder="0"></div>
+       <div><label class="lbl">תשואה צפויה (₪)</label><input type="number" id="dc_exp" value="${d.expReturn??''}" placeholder="0"></div>
+       <div><label class="lbl">תשואה בפועל (₪)</label><input type="number" id="dc_meas" value="${d.measured??''}" placeholder="אחרי מדידה"></div>
+       <div><label class="lbl">תוצאה</label><select id="dc_verdict">${opt(['','הצלחה','חלקי','כישלון'],d.verdict||'')}</select></div></div>
+     <div><label class="lbl">הערות / למידה</label><input id="dc_note" value="${d.note||''}"></div></div>`,
+    `<button class="btn" onclick="saveDecision('${id||''}')">${svg('check')} שמירה</button>
+     ${id?`<button class="btn ghost" style="color:var(--bad)" onclick="delDecision('${id}')">מחיקה</button>`:''}`);}
+function saveDecision(id){const g=k=>document.getElementById(k).value;if(!g('dc_title'))return;
+  const o={title:g('dc_title'),status:g('dc_status'),invest:N(g('dc_invest')),expReturn:N(g('dc_exp')),
+    measured:g('dc_meas')===''?null:N(g('dc_meas')),verdict:g('dc_verdict')||null,note:g('dc_note')||null,
+    date:((id&&S.decisions.find(x=>x.id===id))||{}).date||todayISO()};
+  if(id){Object.assign(S.decisions.find(x=>x.id===id),o);}else{o.id='dc'+Date.now();S.decisions.unshift(o);}
+  save();closeModal();render();toast('ההחלטה נשמרה');}
+function delDecision(id){S.decisions=S.decisions.filter(x=>x.id!==id);save();closeModal();render();toast('נמחק');}
 
 function screenDash(){
   const m=metrics(),c=cashStat(),ev=nextEvent(),ts=taskSum(),L=lights();
@@ -806,6 +969,10 @@ function screenSettings(){
       <div><label class="lbl">יעד ממוצע הזמנה (₪)</label><input type="number" id="s_ao" value="${s.avg_order_target}"></div>
       <div><label class="lbl">יעד פוד קוסט (%)</label><input type="number" id="s_fc" value="${s.food_cost_target}"></div>
       <div><label class="lbl">סף התראת הפקדה (₪)</label><input type="number" id="s_dep" value="${s.cash_deposit_alert}"></div></div>
+      <div class="fgrid"><div style="grid-column:1/-1;font-size:.78rem;color:var(--mute);font-weight:700;margin-top:4px">הנחות למנוע הכסף (משפיע על "מנהל הבוקר" ו"כסף")</div>
+      <div><label class="lbl">פוד קוסט נוכחי משוער (%)</label><input type="number" id="s_afc" value="${s.assumed_food_cost??37}"></div>
+      <div><label class="lbl">ערך ממוצע ללקוח חדש (₪)</label><input type="number" id="s_lv" value="${s.lead_value??1200}"></div>
+      <div><label class="lbl">יעד עלות שכר (% מהמחזור)</label><input type="number" id="s_lt" value="${s.labor_target_pct??28}"></div></div>
       <div><label class="lbl">שותפים (מופרד בפסיק)</label><input id="s_partners" value="${(s.partners||[]).join(', ')}"></div>
       <div style="display:flex;gap:9px;align-items:center"><button class="btn" onclick="saveSettings()">${svg('check')} שמירה</button>
         <button class="btn ghost" onclick="resetAll()">איפוס נתונים</button></div></div></div>
@@ -814,7 +981,8 @@ function screenSettings(){
 }
 function saveSettings(){const g=id=>document.getElementById(id).value;
   S.settings={...S.settings,business:g('s_biz'),location:g('s_loc'),monthly_target:N(g('s_target')),avg_order_target:N(g('s_ao')),
-    food_cost_target:N(g('s_fc')),cash_deposit_alert:N(g('s_dep')),partners:g('s_partners').split(',').map(x=>x.trim()).filter(Boolean)};
+    food_cost_target:N(g('s_fc')),cash_deposit_alert:N(g('s_dep')),assumed_food_cost:N(g('s_afc')),lead_value:N(g('s_lv')),labor_target_pct:N(g('s_lt')),
+    partners:g('s_partners').split(',').map(x=>x.trim()).filter(Boolean)};
   save();render();toast('ההגדרות נשמרו');}
 
 /* ---------- בדיקת מנה חדשה ---------- */
@@ -1257,9 +1425,10 @@ function render(){
     `<button class="navitem ${TAB===id?'on':''}" onclick="go('${id}')">${svg(ic)}<span>${lbl}</span></button>`).join('');
   document.getElementById('tabbar').innerHTML=TABS.map(([id,lbl,ic])=>
     `<button class="tab ${TAB===id?'on':''}" onclick="go('${id}')">${svg(ic)}${lbl}</button>`).join('');
-  const scr={advisor:screenAdvisor,dash:screenDash,journal:screenJournal,cashflow:screenCashflow,calendar:screenCalendar,tasks:screenTasks,
+  const scr={advisor:screenAdvisor,money:screenMoney,sim:screenSim,decisions:screenDecisions,dash:screenDash,journal:screenJournal,cashflow:screenCashflow,calendar:screenCalendar,tasks:screenTasks,
     leads:screenLeads,menu:screenMenu,feas:screenFeas,reports:screenReports,employees:screenEmployees,zreport:screenZreport,docs:screenDocs,settings:screenSettings}[TAB];
   document.getElementById('main').innerHTML=drillBannerHTML()+scr();
+  if(TAB==='sim')simCalc();
 }
 let toastT;function toast(m){const el=document.getElementById('toast');el.textContent=m;el.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>el.classList.remove('show'),1800);}
 window.openEntry=openEntry;window.saveEntry=saveEntry;window.onDate=onDate;window.liveCalc=liveCalc;
@@ -1273,5 +1442,6 @@ window.approveApp=approveApp;window.removeApp=removeApp;window.applyShift=applyS
 window.setDocType=setDocType;window.analyzeDoc=analyzeDoc;window.loadDocSample=loadDocSample;window.confirmDoc=confirmDoc;window.renderDocPreview=renderDocPreview;window.delAnalysis=delAnalysis;
 window.saveSettings=saveSettings;window.sendZ=sendZ;window.render=render;
 window.feasInput=feasInput;window.toggleSel=toggleSel;window.saveEval=saveEval;window.loadEval=loadEval;window.delEval=delEval;window.moveToMenu=moveToMenu;
+window.simCalc=simCalc;window.openDecision=openDecision;window.saveDecision=saveDecision;window.delDecision=delDecision;
 render();
 </script>

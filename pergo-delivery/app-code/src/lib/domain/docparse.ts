@@ -20,7 +20,7 @@ export type ExtractedField = {
 export type ParsedDocument = {
   rows: Rows;
   extracted: ExtractedField[];
-  kind: "csv" | "xlsx" | "unsupported";
+  kind: "csv" | "xlsx" | "pdf" | "unsupported";
 };
 
 // ---------- CSV ----------
@@ -82,14 +82,24 @@ async function entry(files: Record<string, ZipEntry>, name: string): Promise<Uin
   if (!f) return null;
   return f.method === 0 ? f.comp : await inflateRaw(f.comp);
 }
+// Regex-based XML reading (no DOMParser) so this runs in route handlers/Edge too.
+function unescapeXml(s: string): string {
+  return s.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"').replace(/&apos;/g, "'")
+    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(+n))
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, n) => String.fromCharCode(parseInt(n, 16)));
+}
 export async function xlsxToRows(ab: ArrayBuffer): Promise<Rows> {
   const files = unzip(ab), dec = new TextDecoder();
   let shared: string[] = [];
   const ss = await entry(files, "xl/sharedStrings.xml");
   if (ss) {
-    const doc = new DOMParser().parseFromString(dec.decode(ss), "application/xml");
-    shared = Array.from(doc.getElementsByTagName("si")).map((si) =>
-      Array.from(si.getElementsByTagName("t")).map((t) => t.textContent).join(""));
+    const xml = dec.decode(ss);
+    shared = (xml.match(/<si>[\s\S]*?<\/si>/g) || []).map((si) => {
+      let text = "";
+      si.replace(/<t[^>]*>([\s\S]*?)<\/t>/g, (_, g) => { text += unescapeXml(g); return ""; });
+      return text;
+    });
   }
   let sheet = "xl/worksheets/sheet1.xml";
   if (!files[sheet]) {
@@ -98,23 +108,127 @@ export async function xlsxToRows(ab: ArrayBuffer): Promise<Rows> {
   }
   const sh = await entry(files, sheet);
   if (!sh) return [];
-  const doc = new DOMParser().parseFromString(dec.decode(sh), "application/xml");
+  const xml = dec.decode(sh);
   const rows: Rows = [];
-  Array.from(doc.getElementsByTagName("row")).forEach((r) => {
+  const rowRe = /<row[^>]*>([\s\S]*?)<\/row>/g;
+  let rm: RegExpExecArray | null;
+  while ((rm = rowRe.exec(xml))) {
     const cells: string[] = [];
-    Array.from(r.getElementsByTagName("c")).forEach((c) => {
-      const col = colIndex(c.getAttribute("r") || ""), t = c.getAttribute("t");
+    const cRe = /<c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g;
+    let cm: RegExpExecArray | null;
+    while ((cm = cRe.exec(rm[1]))) {
+      const attrs = cm[1], body = cm[2] || "";
+      const col = colIndex((/r="([A-Z]+)\d+"/.exec(attrs) || [])[1] || "");
+      const t = (/t="([^"]+)"/.exec(attrs) || [])[1];
+      const vM = /<v>([\s\S]*?)<\/v>/.exec(body);
+      const isM = /<t[^>]*>([\s\S]*?)<\/t>/.exec(body);
       let v = "";
-      const vEl = c.getElementsByTagName("v")[0], isEl = c.getElementsByTagName("is")[0];
-      if (t === "s" && vEl) v = shared[+(vEl.textContent || 0)] || "";
-      else if ((t === "inlineStr" || t === "str") && (isEl || vEl)) v = (isEl || vEl).textContent || "";
-      else if (vEl) v = vEl.textContent || "";
+      if (t === "s" && vM) v = shared[+vM[1]] || "";
+      else if ((t === "inlineStr" || t === "str") && (isM || vM)) v = unescapeXml((isM ? isM[1] : vM![1]));
+      else if (vM) v = vM[1];
       cells[col] = v;
-    });
+    }
     for (let i = 0; i < cells.length; i++) if (cells[i] == null) cells[i] = "";
     rows.push(cells);
-  });
+  }
   return rows;
+}
+
+// ---------- PDF (best-effort text: FlateDecode + cp1255 Hebrew) ----------
+async function inflateZlib(bytes: Uint8Array): Promise<Uint8Array | null> {
+  for (const fmt of ["deflate", "deflate-raw"] as const) {
+    try {
+      const ds = new DecompressionStream(fmt);
+      const s = new Blob([bytes as unknown as BlobPart]).stream().pipeThrough(ds);
+      return new Uint8Array(await new Response(s).arrayBuffer());
+    } catch { /* try next */ }
+  }
+  return null;
+}
+function latin1(u8: Uint8Array, a: number, b: number): string {
+  let s = ""; for (let i = a; i < b; i++) s += String.fromCharCode(u8[i]); return s;
+}
+function decPdfBytes(bytes: number[]): string {
+  let s = "";
+  for (const b of bytes) {
+    if (b >= 0x20 && b <= 0x7e) s += String.fromCharCode(b);
+    else if (b >= 0xe0 && b <= 0xfa) s += String.fromCharCode(0x05d0 + (b - 0xe0));
+    else if (b === 9 || b === 10 || b === 13) s += " ";
+  }
+  return s;
+}
+function pdfLiteralBytes(str: string): number[] {
+  const out: number[] = [];
+  for (let i = 0; i < str.length; i++) {
+    const c = str[i];
+    if (c === "\\") {
+      const n = str[i + 1];
+      if (n === "n") { out.push(10); i++; }
+      else if (n === "r") { out.push(13); i++; }
+      else if (n === "t") { out.push(9); i++; }
+      else if (n === "(" || n === ")" || n === "\\") { out.push(n.charCodeAt(0)); i++; }
+      else if (n >= "0" && n <= "7") {
+        let oct = n; i++;
+        for (let k = 0; k < 2 && str[i + 1] >= "0" && str[i + 1] <= "7"; k++) { oct += str[i + 1]; i++; }
+        out.push(parseInt(oct, 8) & 0xff);
+      } else { i++; out.push((n || "").charCodeAt(0) || 32); }
+    } else out.push(c.charCodeAt(0) & 0xff);
+  }
+  return out;
+}
+function extractContentText(cs: string): string {
+  let out = "", i = 0; const n = cs.length;
+  while (i < n) {
+    const c = cs[i];
+    if (c === "(") {
+      let j = i + 1, depth = 1, raw = "";
+      while (j < n && depth > 0) {
+        const ch = cs[j];
+        if (ch === "\\") { raw += ch + (cs[j + 1] || ""); j += 2; continue; }
+        if (ch === "(") depth++;
+        else if (ch === ")") { depth--; if (depth === 0) break; }
+        raw += ch; j++;
+      }
+      out += decPdfBytes(pdfLiteralBytes(raw)); i = j + 1; continue;
+    }
+    if (c === "<" && cs[i + 1] !== "<") {
+      let j = i + 1, hex = "";
+      while (j < n && cs[j] !== ">") { hex += cs[j]; j++; }
+      const bytes: number[] = [];
+      hex.replace(/[^0-9a-fA-F]/g, "").replace(/../g, (h) => { bytes.push(parseInt(h, 16)); return ""; });
+      out += decPdfBytes(bytes); i = j + 1; continue;
+    }
+    if (cs.startsWith("T*", i) || cs.startsWith("Td", i) || cs.startsWith("TD", i)) { out += "\n"; i += 2; continue; }
+    if (c === "'" || c === '"') { out += "\n"; i++; continue; }
+    i++;
+  }
+  return out;
+}
+export async function pdfToText(ab: ArrayBuffer): Promise<string> {
+  const u8 = new Uint8Array(ab), bin = latin1(u8, 0, u8.length);
+  let text = "";
+  const re = /stream\r?\n/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(bin))) {
+    const ds = bin.lastIndexOf("<<", m.index), dict = ds >= 0 ? bin.slice(ds, m.index) : "";
+    const dataStart = m.index + m[0].length, end = bin.indexOf("endstream", dataStart);
+    if (end < 0) break;
+    let e2 = end; while (e2 > dataStart && (u8[e2 - 1] === 10 || u8[e2 - 1] === 13)) e2--;
+    const raw = u8.subarray(dataStart, e2);
+    let decoded: Uint8Array | null = null;
+    if (/FlateDecode/.test(dict)) decoded = await inflateZlib(raw);
+    else if (/\/Filter/.test(dict)) { re.lastIndex = end + 9; continue; }
+    else decoded = raw;
+    if (decoded) {
+      const cs = latin1(decoded, 0, decoded.length);
+      if (/BT|Tj|TJ/.test(cs)) text += extractContentText(cs) + "\n";
+    }
+    re.lastIndex = end + 9;
+  }
+  return text.replace(/[ \t]+/g, " ").replace(/ *\n */g, "\n").replace(/\n{2,}/g, "\n").trim();
+}
+function textToRows(text: string): Rows {
+  return text.split("\n").map((l) => l.trim()).filter(Boolean).map((l) => l.split(/\s+/));
 }
 
 // ---------- extraction ----------
@@ -259,6 +373,10 @@ export async function parseFile(
     const rows = await xlsxToRows(buffer);
     return { rows, extracted: extractByType(documentType, rows), kind: "xlsx" };
   }
-  // pdf / images / xls: structure ready, extraction is a later stage
+  if (ext === "pdf") {
+    const rows = textToRows(await pdfToText(buffer));
+    return { rows, extracted: rows.length ? extractByType(documentType, rows) : [], kind: rows.length ? "pdf" : "unsupported" };
+  }
+  // images / xls (scanned or legacy): OCR / conversion is a later stage
   return { rows: [], extracted: [], kind: "unsupported" };
 }

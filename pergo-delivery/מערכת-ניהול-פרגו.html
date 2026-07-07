@@ -1272,6 +1272,48 @@ async function xlsxRows(ab){
       else if(vEl)v=vEl.textContent||'';cells[col]=v;});
     for(let i=0;i<cells.length;i++)if(cells[i]==null)cells[i]='';rows.push(cells);});
   return rows;}
+/* PDF — חילוץ טקסט best-effort בדפדפן (FlateDecode + cp1255), ללא ספריות חיצוניות */
+async function inflateZlib(bytes){for(const fmt of ['deflate','deflate-raw']){try{
+  const ds=new DecompressionStream(fmt);const s=new Blob([bytes]).stream().pipeThrough(ds);
+  return new Uint8Array(await new Response(s).arrayBuffer());}catch(e){}}return null;}
+function latin1(u8,a,b){let s='';for(let i=a;i<b;i++)s+=String.fromCharCode(u8[i]);return s;}
+function decPdfBytes(bytes){let s='';for(let i=0;i<bytes.length;i++){const b=bytes[i];
+  if(b>=0x20&&b<=0x7e)s+=String.fromCharCode(b);
+  else if(b>=0xe0&&b<=0xfa)s+=String.fromCharCode(0x05d0+(b-0xe0));
+  else if(b===9||b===10||b===13)s+=' ';}return s;}
+function pdfLiteralBytes(str){const out=[];for(let i=0;i<str.length;i++){const c=str[i];
+  if(c==='\\'){const n=str[i+1];
+    if(n==='n'){out.push(10);i++;}else if(n==='r'){out.push(13);i++;}else if(n==='t'){out.push(9);i++;}
+    else if(n==='('||n===')'||n==='\\'){out.push(n.charCodeAt(0));i++;}
+    else if(n>='0'&&n<='7'){let oct=n;i++;for(let k=0;k<2&&str[i+1]>='0'&&str[i+1]<='7';k++){oct+=str[i+1];i++;}out.push(parseInt(oct,8)&0xff);}
+    else{i++;out.push((n||'').charCodeAt(0)||32);}}
+  else out.push(c.charCodeAt(0)&0xff);}return out;}
+function extractContentText(cs){let out='',i=0;const n=cs.length;
+  while(i<n){const c=cs[i];
+    if(c==='('){let j=i+1,depth=1,raw='';while(j<n&&depth>0){const ch=cs[j];
+        if(ch==='\\'){raw+=ch+(cs[j+1]||'');j+=2;continue;}
+        if(ch==='(')depth++;else if(ch===')'){depth--;if(depth===0)break;}raw+=ch;j++;}
+      out+=decPdfBytes(pdfLiteralBytes(raw));i=j+1;continue;}
+    if(c==='<'&&cs[i+1]!=='<'){let j=i+1,hex='';while(j<n&&cs[j]!=='>'){hex+=cs[j];j++;}
+      const bytes=[];hex.replace(/[^0-9a-fA-F]/g,'').replace(/../g,h=>{bytes.push(parseInt(h,16));return '';});
+      out+=decPdfBytes(bytes);i=j+1;continue;}
+    if(cs.startsWith('T*',i)||cs.startsWith('Td',i)||cs.startsWith('TD',i)){out+='\n';i+=2;continue;}
+    if(c==='\''||c==='"'){out+='\n';i++;continue;}
+    i++;}
+  return out;}
+async function pdfToText(ab){const u8=new Uint8Array(ab),bin=latin1(u8,0,u8.length);
+  let text='';const re=/stream\r?\n/g;let m;
+  while((m=re.exec(bin))){const ds=bin.lastIndexOf('<<',m.index),dict=ds>=0?bin.slice(ds,m.index):'';
+    const dataStart=m.index+m[0].length,end=bin.indexOf('endstream',dataStart);if(end<0)break;
+    let e2=end;while(e2>dataStart&&(u8[e2-1]===10||u8[e2-1]===13))e2--;
+    const raw=u8.subarray(dataStart,e2);let decoded=null;
+    if(/FlateDecode/.test(dict)){decoded=await inflateZlib(raw);}
+    else if(/\/Filter/.test(dict)){re.lastIndex=end+9;continue;}
+    else decoded=raw;
+    if(decoded){const cs=latin1(decoded,0,decoded.length);
+      if(/BT|Tj|TJ/.test(cs))text+=extractContentText(cs)+'\n';}
+    re.lastIndex=end+9;}
+  return text.replace(/[ \t]+/g,' ').replace(/ *\n */g,'\n').replace(/\n{2,}/g,'\n').trim();}
 const upEl=id=>document.getElementById(id);
 function setUpStatus(kind,html){const el=upEl('doc-upstatus');if(el)el.innerHTML=`<div class="banner ${kind}" style="margin-top:12px">${svg(kind==='bad'?'alert':kind==='warn'?'alert':'check')}${html}</div>`;}
 function recordUpload(file,rowsN,status){const rec={id:'up'+Date.now()+Math.floor(Math.random()*1e4),type:DOCTYPE,label:DOCS[DOCTYPE].label,
@@ -1286,7 +1328,13 @@ async function handleDocFile(file){
     if(ext==='csv'||/csv|text\/plain/.test(file.type)){ingestRows(csvRows(await file.text()),file);}
     else if(ext==='xlsx'){ingestRows(await xlsxRows(await file.arrayBuffer()),file);}
     else if(ext==='xls'){recordUpload(file,0,'נשמר · ללא ניתוח');setUpStatus('warn','פורמט <b>xls</b> ישן אינו נתמך לניתוח. שמרו כ-<b>xlsx</b> או <b>CSV</b> ונסו שוב (הקובץ נשמר ברשימה).');}
-    else if(ext==='pdf'){recordUpload(file,0,'נשמר · ללא ניתוח');setUpStatus('warn','<b>PDF נתמך בשלב הבא.</b> הקובץ נשמר — כרגע העלו Excel/CSV או הזינו ידנית למטה.');}
+    else if(ext==='pdf'){setUpStatus('warn',`מחלץ טקסט מ-PDF «${file.name}»…`);
+      let txt='';try{txt=await pdfToText(await file.arrayBuffer());}catch(e){txt='';}
+      const hasData=txt&&/\d/.test(txt)&&txt.replace(/\s/g,'').length>8;
+      recordUpload(file,hasData?txt.split('\n').filter(Boolean).length:0,hasData?'טקסט חולץ · ממתין לניתוח':'נשמר · ללא ניתוח');
+      if(hasData){const ta=upEl('doc-txt');if(ta)ta.value=txt;
+        setUpStatus('good','חילצנו טקסט מה-PDF (זיהוי בסיסי). <b>בדקו ותקנו למטה</b> במידת הצורך, ואז לחצו «נתח מסמך».');}
+      else setUpStatus('warn','ה-PDF כנראה <b>סרוק (תמונה)</b> או בפורמט לא נתמך — נדרש OCR (שלב הבא). ניתן להזין ידנית למטה.');}
     else if(/^(png|jpe?g)$/.test(ext)){recordUpload(file,0,'נשמר · ללא ניתוח');setUpStatus('warn','<b>זיהוי תמונה (OCR) ייתמך בשלב הבא.</b> הקובץ נשמר — כרגע העלו Excel/CSV או הזינו ידנית.');}
     else{setUpStatus('bad','סוג קובץ זה עדיין לא נתמך. העלו <b>Excel (xlsx)</b> או <b>CSV</b>.');}
   }catch(e){recordUpload(file,0,'עלה · ניתוח נכשל');setUpStatus('bad','הקובץ עלה בהצלחה, אך לא הצלחנו לזהות נתונים אוטומטית. אפשר לשמור ולהזין ידנית למטה.');}
@@ -1343,7 +1391,7 @@ function screenDocs(){const d=DOCS[DOCTYPE];
       <input type="file" id="doc-file" accept=".csv,.xlsx,.xls,.pdf,.png,.jpg,.jpeg" onchange="onDocFile(this)" style="display:none">
       <div style="width:44px;height:44px;border-radius:12px;background:var(--accent-soft);color:var(--accent-ink);display:grid;place-items:center;margin:0 auto 8px">${svg('up','ic22')}</div>
       <div style="font-weight:700">בחרו קובץ מהמחשב או גררו לכאן</div>
-      <div style="font-size:.78rem;color:var(--mute);margin-top:3px">Excel (xlsx) · CSV · PDF/תמונה נשמרים לשלב הבא</div></label>
+      <div style="font-size:.78rem;color:var(--mute);margin-top:3px">Excel (xlsx) · CSV · PDF (חילוץ טקסט) · תמונה/OCR בשלב הבא</div></label>
     <div id="doc-upstatus"></div>
     <div style="display:flex;align-items:center;gap:10px;margin:14px 0 8px"><div style="flex:1;height:1px;background:var(--border)"></div>
       <span style="font-size:.76rem;color:var(--mute)">או הזינו / הדביקו ידנית</span><div style="flex:1;height:1px;background:var(--border)"></div></div>

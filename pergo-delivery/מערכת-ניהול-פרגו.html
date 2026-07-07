@@ -255,7 +255,7 @@ function defaults(){ return {
     {id:'ld2',name:'בית ספר הראל',category:'בית ספר',contact:'המזכירה',role:null,phone:null,tasting:'סלמון',letter:false,stage:'אותר',notes:null}
   ],
   employees:seedEmployees(),shifts:seedShifts(),shiftApps:seedApps(),
-  evaluations:[],feasDraft:null,viewer:{mode:'manager',empId:null},weekOffset:0,_v:2 }; }
+  evaluations:[],feasDraft:null,analyses:[],viewer:{mode:'manager',empId:null},weekOffset:0,_v:2 }; }
 function seedEmployees(){return [
   {id:'em1',name:'יוסי כהן',phone:'050-1111111',role:'טבח',hourly_cost:52,status:'פעיל',notes:null},
   {id:'em2',name:'דנה לוי',phone:'050-2222222',role:'מלצרית',hourly_cost:38,status:'פעיל',notes:null},
@@ -859,50 +859,159 @@ function moveToMenu(status){captureFeas();if(!FEAS.name){toast('הזינו שם 
   S.menu.push({id:'mn'+Date.now(),name:FEAS.name,category:FEAS.category,price:r.price||null,cost:N(FEAS.food)||null,status,campaign:r.camp[0]||null});
   save();toast('הועבר לתפריט ('+status+')');go('menu');}
 
-/* ---------- ייבוא מסמכים ---------- */
-const DOC_TYPES=[['תמחיר עובדים','פעיל'],['Z יומי מהקופה','בקרוב'],['דוח רווח והפסד','בקרוב'],
-  ['מאזן בוחן','בקרוב'],['כרטסת ספקים','בקרוב'],['דוח קניות חומרי גלם','בקרוב'],['דוח מכירות תקופתי','בקרוב']];
+/* ---------- ייבוא מסמכים (כל הסוגים פעילים) ---------- */
 const ROLE_ALIASES={'טבח':'טבח','טבחית':'טבח','שף':'טבח','cook':'טבח','מלצר':'מלצרית','מלצרית':'מלצרית','מלצריות':'מלצרית','waitress':'מלצרית','מארח':'מארחת','מארחת':'מארחת','hostess':'מארחת','מנהל':'מנהל','manager':'מנהל','אחראי':'מנהל','אחראית':'מנהל'};
-let empImportRows=[];
+const DOCS={
+  emp:{label:'תמחיר עובדים',icon:'👥',hint:'שורה לכל עובד: שם · תפקיד · עלות שעתית',sample:'יוסי כהן, טבח, 52\nדנה לוי, מלצרית, 38\nמאיה, מלצרית, 38\nרות, מארחת, 40\nאבי, טבח, 55'},
+  z:{label:'Z יומי מהקופה',icon:'🧾',hint:'בחרו תאריך, ואז שורה לכל שדה: מחזור / עסקאות / מזומן / אשראי / תן ביס / וולט / אחר',sample:'מחזור 10627\nעסקאות 73\nמזומן 4000\nאשראי 6000\nוולט 627\nמשלוחים 8\nאיסוף 9\nישיבה 58'},
+  pl:{label:'דוח רווח והפסד',icon:'📊',hint:'שורה לכל סעיף עם סכום (כולל שורת מחזור)',sample:'מחזור 210000\nחומרי גלם 80000\nשכר עובדים 65000\nשכירות 18000\nחשמל 6000\nהנהלת חשבונות 4000\nפרסום 9000\nעמלות אשראי 6000\nמשלוחים 12000'},
+  purch:{label:'דוח קניות חומרי גלם',icon:'🥬',hint:'קטגוריה וסכום',sample:'מוצרי חלב 22000\nירקות 12000\nקמח 6000\nדגים 15000\nשתייה 5000\nחד פעמי 4000'},
+  supp:{label:'כרטסת ספקים',icon:'🚚',hint:'ספק · סכום החודש · [חודש קודם]',sample:'תנובה 22000 18000\nשוק הדגים 15000 9000\nמאפייה 6000 6200\nיינות 5000 4800\nירקן 12000 10000'},
+  sales:{label:'דוח מכירות תקופתי',icon:'📈',hint:'פריט/קטגוריה וסכום',sample:'פיצה משפחתית 42000\nסלמון 18000\nפסטות 15000\nסלטים 9000\nקינוחים 6000\nשתייה 8000'},
+  bal:{label:'מאזן בוחן',icon:'📒',hint:'חשבון ויתרה (יתרות זכות כשליליות)',sample:'ספקים -45000\nלקוחות 12000\nבנק הפועלים 100000\nהלוואה -80000\nקופה 7000'}
+};
+const DOC_ORDER=['emp','z','pl','purch','supp','sales','bal'];
+let DOCTYPE='emp',docParsed=[],docEmp=[],docAnalysis=null,docZfields=[];
+const money0=v=>money(v);
+function tbl(head,rows){return `<div class="card tscroll"><table><thead><tr>${head.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>`;}
+function chip(c,t){return `<span class="chip ${c}">${t}</span>`;}
+function statusOf(pct,target){if(pct<=target)return['good','תקין'];if(pct<=target+3)return['warn','לתשומת לב'];return['bad','חריגה'];}
 function parseEmpLine(line){const toks=line.replace(/[,;₪]/g,' ').split(/\s+/).map(s=>s.trim()).filter(Boolean);
   let cost=null,role=null,name=[];toks.forEach(t=>{if(/^\d+(\.\d+)?$/.test(t)&&cost===null)cost=+t;else if(ROLE_ALIASES[t])role=ROLE_ALIASES[t];else name.push(t);});
   name=name.join(' ');if(!name)return null;return {name,role,cost};}
-function parseEmpImport(){const el=document.getElementById('emp-import-txt');if(!el)return;
-  empImportRows=el.value.split(/\n/).map(l=>l.trim()).filter(Boolean).map(parseEmpLine).filter(Boolean);renderEmpPreview();}
-function renderEmpPreview(){const el=document.getElementById('emp-import-preview');if(!el)return;
-  if(!empImportRows.length){el.innerHTML='<div style="color:var(--mute);font-size:.85rem;padding:8px 0">הדביקו רשימה ולחצו "נתח מסמך" לתצוגה מקדימה.</div>';return;}
+function parseAmountLine(line){const nums=[];const label=line.replace(/-?\d[\d,\.]*/g,m=>{nums.push(parseFloat(m.replace(/,/g,'')));return ' ';}).replace(/[,:;()]/g,' ').replace(/\s+/g,' ').trim();return {label:label||'—',nums};}
+function parseLines(txt){return txt.split(/\n/).map(l=>l.trim()).filter(Boolean).map(parseAmountLine).filter(r=>r.label!=='—'||r.nums.length);}
+
+function setDocType(k){DOCTYPE=k;docParsed=[];docEmp=[];docAnalysis=null;render();}
+function loadDocSample(){const el=document.getElementById('doc-txt');if(el){el.value=DOCS[DOCTYPE].sample;analyzeDoc();}}
+function analyzeDoc(){const el=document.getElementById('doc-txt');if(!el)return;
+  if(DOCTYPE==='emp')docEmp=el.value.split(/\n/).map(l=>l.trim()).filter(Boolean).map(parseEmpLine).filter(Boolean);
+  else docParsed=parseLines(el.value);
+  renderDocPreview();}
+function renderDocPreview(){const el=document.getElementById('doc-preview');if(!el)return;
+  if(DOCTYPE==='emp'){el.innerHTML=empPreview();return;}
+  if(!docParsed.length){el.innerHTML='<div style="color:var(--mute);font-size:.85rem;padding:8px 0">הדביקו נתונים ולחצו "נתח מסמך".</div>';return;}
+  el.innerHTML=({z:zPreview,pl:plPreview,purch:purchPreview,supp:suppPreview,sales:salesPreview,bal:balPreview}[DOCTYPE])();}
+function confirmDoc(){({emp:confirmEmp,z:confirmZ,pl:saveAnalysis,purch:saveAnalysis,supp:saveAnalysis,sales:saveAnalysis,bal:saveAnalysis}[DOCTYPE])();}
+const actions=`<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap"><button class="btn" onclick="confirmDoc()">${svg('check')} __L__</button><button class="btn ghost" onclick="docParsed=[];docEmp=[];renderDocPreview()">נקה</button></div>`;
+
+function empPreview(){if(!docEmp.length)return '<div style="color:var(--mute);font-size:.85rem;padding:8px 0">הדביקו רשימה ולחצו "נתח מסמך".</div>';
   const existing=new Set(S.employees.map(e=>e.name));
-  el.innerHTML=`<div style="font-size:.78rem;color:var(--dim);font-weight:700;margin-bottom:8px">תצוגה מקדימה — ${empImportRows.length} עובדים זוהו</div>
-    <div class="card tscroll"><table><thead><tr><th>שם עובד</th><th>תפקיד</th><th>עלות שעתית</th><th>ייכנס ל</th><th>סטטוס</th></tr></thead><tbody>
-    ${empImportRows.map(r=>{const exists=existing.has(r.name),need=(!r.role||r.cost==null);
-      const st=need?'<span class="chip warn">דורש בדיקה</span>':exists?'<span class="chip acc">קיים · יעודכן</span>':'<span class="chip good">חדש</span>';
-      return `<tr><td style="font-weight:600">${r.name}</td><td>${r.role||'—'}</td><td class="tnum">${r.cost!=null?money(r.cost):'—'}</td><td style="color:var(--dim);font-size:.8rem">עובדים</td><td>${st}</td></tr>`;}).join('')}</tbody></table></div>
-    <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap"><button class="btn" onclick="confirmEmpImport()">${svg('check')} אשר קליטה (${empImportRows.length})</button>
-      <button class="btn ghost" onclick="empImportRows=[];renderEmpPreview()">נקה</button></div>`;}
-function confirmEmpImport(){if(!empImportRows.length)return;let add=0,upd=0;
-  empImportRows.forEach(r=>{const ex=S.employees.find(e=>e.name===r.name);
+  return `<div style="font-size:.78rem;color:var(--dim);font-weight:700;margin-bottom:8px">תצוגה מקדימה — ${docEmp.length} עובדים זוהו</div>
+    ${tbl(['שם עובד','תפקיד','עלות שעתית','ייכנס ל','סטטוס'],docEmp.map(r=>{const need=(!r.role||r.cost==null);
+      const st=need?chip('warn','דורש בדיקה'):existing.has(r.name)?chip('acc','קיים · יעודכן'):chip('good','חדש');
+      return `<tr><td style="font-weight:600">${r.name}</td><td>${r.role||'—'}</td><td class="tnum">${r.cost!=null?money0(r.cost):'—'}</td><td style="color:var(--dim);font-size:.8rem">עובדים</td><td>${st}</td></tr>`;}).join(''))}
+    ${actions.replace('__L__',`אשר קליטה (${docEmp.length})`)}`;}
+function confirmEmp(){if(!docEmp.length)return;let add=0,upd=0;
+  docEmp.forEach(r=>{const ex=S.employees.find(e=>e.name===r.name);
     if(ex){if(r.role)ex.role=r.role;if(r.cost!=null)ex.hourly_cost=r.cost;upd++;}
     else{S.employees.push({id:'em'+Date.now()+Math.floor(Math.random()*1e4),name:r.name,phone:null,role:r.role||'מלצרית',hourly_cost:r.cost,status:'פעיל',notes:r.role?null:'תפקיד לבדיקה'});add++;}});
-  empImportRows=[];save();toast(`נקלטו: ${add} חדשים · ${upd} עודכנו`);go('employees');}
-function loadEmpSample(){const el=document.getElementById('emp-import-txt');if(el){el.value='יוסי כהן, טבח, 52\nדנה לוי, מלצרית, 38\nמאיה, מלצרית, 38\nרות, מארחת, 40\nאבי, טבח, 55\nמרדכי, מנהל, 0';parseEmpImport();}}
-function screenDocs(){
-  return `<div class="card pad" style="max-width:780px;margin-bottom:16px">
-    <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px">
+  docEmp=[];save();toast(`נקלטו: ${add} חדשים · ${upd} עודכנו`);go('employees');}
+
+const Z_FIELDS=[[/מחזור/,'revenue','מחזור יומי'],[/עסקא/,'transactions','מספר עסקאות'],[/מזומן/,'cash_received','מזומן שהתקבל'],[/אשראי|קופה/,'credit_received','אשראי / קופה'],[/תן ?ביס|סיבוס/,'tenbis_sibus','תן ביס / סיבוס'],[/וולט|משלוחה/,'wolt_mishloha','וולט / משלוחה'],[/משלוחים/,'deliveries','משלוחים'],[/איסוף/,'pickup','איסוף עצמי'],[/ישיבה/,'dine_in','ישיבה במקום'],[/אחר/,'other_payment','אחר']];
+function zPreview(){const date=document.getElementById('doc-date')?document.getElementById('doc-date').value:todayISO();
+  const ex=S.journal.find(e=>e.date===date);
+  docZfields=docParsed.map(r=>{const f=Z_FIELDS.find(z=>z[0].test(r.label));return f?{field:f[1],label:f[2],value:r.nums[0]??null}:null;}).filter(Boolean);
+  const rows=docZfields.map(f=>{const cur=ex?ex[f.field]:null;const st=(cur!=null&&cur!=='')?chip('acc','קיים'):chip('good','חדש');
+    return `<tr><td>${f.label}</td><td style="color:var(--dim);font-size:.8rem">יומן</td><td class="tnum">${cur!=null&&cur!==''?nf(cur):'—'}</td><td class="tnum" style="font-weight:700">${f.value!=null?nf(f.value):'—'}</td><td>${st}</td></tr>`;}).join('');
+  const opts=ex?`<div style="margin:10px 0"><div class="lbl">היום כבר קיים ביומן — כיצד לקלוט?</div>
+    <label style="display:block;font-size:.86rem"><input type="radio" name="zmode" value="fill" checked style="width:auto"> השלם רק שדות ריקים</label>
+    <label style="display:block;font-size:.86rem"><input type="radio" name="zmode" value="replace" style="width:auto"> החלף נתונים קיימים</label></div>`:'';
+  return `<div style="font-size:.78rem;color:var(--dim);font-weight:700;margin-bottom:8px">תצוגה מקדימה · ${gregD(date)} · ${docZfields.length} שדות</div>
+    ${tbl(['שדה שנמצא','ייכנס ל','ערך קיים','ערך חדש','סטטוס'],rows)}${opts}${actions.replace('__L__','אשר קליטה ליומן')}`;}
+function confirmZ(){const date=document.getElementById('doc-date').value;if(!date||!docZfields.length)return;
+  const mode=(document.querySelector('input[name="zmode"]:checked')||{}).value||'replace';
+  let e=S.journal.find(x=>x.date===date);
+  if(!e){e={date,weekday:weekday(date),hebrew:hebrew(date),event:(SEED.calendar.find(c=>c.date===date)||{}).event||null};S.journal.push(e);}
+  docZfields.forEach(f=>{if(f.value==null)return;const empty=(e[f.field]==null||e[f.field]==='');if(mode==='fill'&&!empty)return;e[f.field]=f.value;});
+  docParsed=[];save();toast('נקלט ליומן היומי');go('journal');}
+
+const PL_MAP=[[/מחזור|הכנס/,'revenue','מחזור',0],[/חומרי גלם|גלם/,'food','חומרי גלם',34],[/שכר|עובד|משכורת/,'labor','שכר עובדים',30],[/שכירות|שכ.?ד/,'rent','שכירות',10],[/חשמל|מים|ארנונה|תשתית/,'utilities','חשמל ותשתיות',4],[/הנהלת חשבונות|הנה.?ח|רו.?ח/,'accounting','הנהלת חשבונות',2],[/פרסום|שיווק/,'marketing','פרסום ושיווק',5],[/עמלה|עמלות|סליקה/,'commissions','עמלות אשראי',3],[/משלוח|שליח/,'delivery','משלוחים',6]];
+function plPreview(){let revenue=0;const items=[];
+  docParsed.forEach(r=>{const amt=r.nums[0]||0;const m=PL_MAP.find(x=>x[0].test(r.label));const c=m?{key:m[1],name:m[2],target:m[3]}:{key:'other',name:r.label,target:6};
+    if(c.key==='revenue'){revenue+=amt;return;}items.push({...c,amount:amt});});
+  if(!revenue)revenue=metrics().cum||1;
+  const totalExp=items.reduce((s,i)=>s+i.amount,0),op=revenue-totalExp,opPct=Math.round(op/revenue*1000)/10,rec=[];
+  const rows=items.map(i=>{const pct=Math.round(i.amount/revenue*1000)/10,[c,st]=statusOf(pct,i.target),gap=Math.round((pct-i.target)*10)/10;
+    if(c==='bad')rec.push(i.key==='food'?`פוד קוסט ${pct}% (יעד ${i.target}%) — לבדוק מחירי גבינה/דגים/ירקות מול ספקים.`:i.key==='labor'?`שכר עובדים ${pct}% מהמחזור — לבדוק התאמת משמרות לימים חלשים.`:i.key==='accounting'?`הנהלת חשבונות גבוהה יחסית — לבחון הצעות נוספות.`:`${i.name} ${pct}% — מעל היעד ב-${gap}%, לבדוק צמצום.`);
+    return `<tr><td>${i.name}</td><td class="tnum">${money0(i.amount)}</td><td class="tnum">${pct}%</td><td class="tnum">${i.target}%</td><td class="tnum" style="color:${gap>0?'var(--bad)':'var(--good)'}">${gap>0?'+':''}${gap}%</td><td>${chip(c,st)}</td></tr>`;}).join('');
+  const opColor=opPct>=15?'good':opPct>=8?'warn':'bad';
+  docAnalysis={id:'an'+Date.now()+Math.floor(Math.random()*1e4),type:'pl',period:(document.getElementById('doc-period')||{}).value||'',summary:`רווח תפעולי ${opPct}%`,revenue,totalExp,op,opPct,items,rec};
+  return `<div style="font-size:.78rem;color:var(--dim);font-weight:700;margin-bottom:8px">ניתוח רווח והפסד · מחזור ${money0(revenue)}</div>
+    ${tbl(['סעיף','בפועל','% מהמחזור','יעד','פער','סטטוס'],rows)}
+    <div class="comp" style="grid-template-columns:repeat(3,1fr);margin-top:12px">
+      <div class="c"><small>סך הוצאות</small><b class="tnum">${money0(totalExp)}</b></div>
+      <div class="c"><small>רווח תפעולי</small><b class="tnum" style="color:var(--${opColor})">${money0(op)}</b></div>
+      <div class="c"><small>% רווח תפעולי</small><b class="tnum" style="color:var(--${opColor})">${opPct}%</b></div></div>
+    ${rec.length?`<div style="margin-top:12px"><div class="lbl">המלצות AI לצמצום עלויות</div>${rec.map(r=>`<div class="banner warn" style="margin:6px 0">${svg('alert')}${r}</div>`).join('')}</div>`:`<div class="banner" style="background:var(--good-soft);color:var(--good);margin-top:12px">${svg('check')}מבנה ההוצאות תקין מול היעדים.</div>`}
+    ${actions.replace('__L__','שמור ניתוח')}`;}
+
+function purchPreview(){const revenue=metrics().cum||1,tgt=N(S.settings.food_cost_target);
+  const items=docParsed.map(r=>({name:r.label,amount:r.nums[0]||0})),total=items.reduce((s,i)=>s+i.amount,0),pct=Math.round(total/revenue*1000)/10,rec=[];
+  const rows=items.map(i=>{const p=Math.round(i.amount/revenue*1000)/10,high=p>8;if(high)rec.push(`${i.name}: ${money0(i.amount)} (${p}% מהמחזור) — קטגוריה משמעותית, לבדוק מחירים/בזבוז.`);
+    return `<tr><td>${i.name}</td><td class="tnum">${money0(i.amount)}</td><td class="tnum">${p}%</td><td>${chip(high?'warn':'good',high?'לבדיקה':'תקין')}</td></tr>`;}).join('');
+  const[fc]=statusOf(pct,tgt);
+  docAnalysis={id:'an'+Date.now()+Math.floor(Math.random()*1e4),type:'purch',period:(document.getElementById('doc-period')||{}).value||'',summary:`פוד קוסט ${pct}%`,revenue,total,pct,items,rec};
+  return `<div style="font-size:.78rem;color:var(--dim);font-weight:700;margin-bottom:8px">ניתוח קניות · מול מחזור ${money0(revenue)}</div>
+    ${tbl(['קטגוריה','סכום','% מהמחזור','סטטוס'],rows)}
+    <div class="comp" style="grid-template-columns:repeat(2,1fr);margin-top:12px"><div class="c"><small>סך קניות</small><b class="tnum">${money0(total)}</b></div>
+      <div class="c"><small>פוד קוסט כולל</small><b class="tnum" style="color:var(--${fc})">${pct}% (יעד ${tgt}%)</b></div></div>
+    ${pct>tgt?`<div class="banner warn" style="margin-top:12px">${svg('alert')}פוד קוסט ${pct}% מעל היעד (${tgt}%) — ${rec[0]||'לבדוק ספקים מרכזיים.'}</div>`:`<div class="banner" style="background:var(--good-soft);color:var(--good);margin-top:12px">${svg('check')}פוד קוסט בתוך היעד.</div>`}
+    ${actions.replace('__L__','שמור ניתוח')}`;}
+
+function suppPreview(){const items=docParsed.map(r=>({name:r.label,cur:r.nums[0]||0,prev:r.nums[1]!=null?r.nums[1]:null})).sort((a,b)=>b.cur-a.cur);
+  const total=items.reduce((s,i)=>s+i.cur,0),rec=[];
+  const rows=items.map(i=>{const chg=i.prev?Math.round((i.cur-i.prev)/i.prev*1000)/10:null,high=chg!=null&&chg>=15;if(high)rec.push(`${i.name}: עלייה של ${chg}% מהחודש הקודם — לבדוק מחירים/השוואת הצעות.`);
+    return `<tr><td>${i.name}</td><td class="tnum">${money0(i.cur)}</td><td class="tnum">${i.prev!=null?money0(i.prev):'—'}</td><td class="tnum" style="color:${chg==null?'var(--dim)':chg>=15?'var(--bad)':chg<0?'var(--good)':'var(--ink)'}">${chg==null?'—':(chg>0?'+':'')+chg+'%'}</td><td>${chg!=null?chip(high?'bad':'good',high?'חריגה':'תקין'):''}</td></tr>`;}).join('');
+  docAnalysis={id:'an'+Date.now()+Math.floor(Math.random()*1e4),type:'supp',period:(document.getElementById('doc-period')||{}).value||'',summary:`${items.length} ספקים · ${money0(total)}`,total,items,rec};
+  return `<div style="font-size:.78rem;color:var(--dim);font-weight:700;margin-bottom:8px">כרטסת ספקים · סה"כ ${money0(total)}</div>
+    ${tbl(['ספק','החודש','חודש קודם','שינוי','סטטוס'],rows)}
+    ${rec.length?`<div style="margin-top:12px"><div class="lbl">המלצות מיקוח</div>${rec.map(r=>`<div class="banner warn" style="margin:6px 0">${svg('alert')}${r}</div>`).join('')}</div>`:`<div class="banner" style="background:var(--good-soft);color:var(--good);margin-top:12px">${svg('check')}אין ספקים עם עלייה חריגה.</div>`}
+    ${actions.replace('__L__','שמור ניתוח')}`;}
+
+function salesPreview(){const items=docParsed.map(r=>({name:r.label,amount:r.nums[0]||0})).sort((a,b)=>b.amount-a.amount);
+  const total=items.reduce((s,i)=>s+i.amount,0),avg=items.length?total/items.length:0;
+  const rows=items.map((i,idx)=>{const p=Math.round(i.amount/total*1000)/10,tag=idx===0?chip('good','מוביל'):i.amount<avg*0.5?chip('warn','חלש'):'';return `<tr><td>${i.name}</td><td class="tnum">${money0(i.amount)}</td><td class="tnum">${p}%</td><td>${tag}</td></tr>`;}).join('');
+  docAnalysis={id:'an'+Date.now()+Math.floor(Math.random()*1e4),type:'sales',period:(document.getElementById('doc-period')||{}).value||'',summary:`מוביל: ${items[0]?items[0].name:'-'}`,total,items};
+  return `<div style="font-size:.78rem;color:var(--dim);font-weight:700;margin-bottom:8px">ניתוח מכירות · סה"כ ${money0(total)} · ${items.length} פריטים</div>
+    ${tbl(['פריט/קטגוריה','מכירות','% מהסך','סטטוס'],rows)}
+    <div class="banner" style="background:var(--accent-soft);color:var(--accent-ink);margin-top:12px">${svg('trend')}מנה מובילה: ${items[0]?items[0].name:'-'} · מנות חלשות: ${items.filter(i=>i.amount<avg*0.5).map(i=>i.name).join(', ')||'אין'}</div>
+    ${actions.replace('__L__','שמור ניתוח')}`;}
+
+const BAL_CAT=[[/ספק/,'ספקים'],[/לקוח/,'לקוחות'],[/בנק|עו.?ש/,'בנקים'],[/הלוואה|אשראי בנק/,'הלוואות'],[/קופה|מזומן/,'קופה/מזומן'],[/מע.?מ|מס /,'מסים']];
+function balPreview(){const groups={},unknown=[];docParsed.forEach(r=>{const amt=r.nums[0]||0;const g=(BAL_CAT.find(x=>x[0].test(r.label))||[null,null])[1];if(!g)unknown.push(r.label);groups[g||'אחר']=(groups[g||'אחר']||0)+amt;});
+  const rows=Object.entries(groups).map(([g,v])=>`<tr><td>${g}</td><td class="tnum" style="color:${v<0?'var(--bad)':'var(--ink)'}">${money0(v)}</td><td>${g==='הלוואות'&&v<0?chip('warn','התחייבות'):g==='אחר'?chip('warn','לבדיקה'):chip('good','—')}</td></tr>`).join('');
+  docAnalysis={id:'an'+Date.now()+Math.floor(Math.random()*1e4),type:'bal',period:(document.getElementById('doc-period')||{}).value||'',summary:`${Object.keys(groups).length} קטגוריות`,groups};
+  return `<div style="font-size:.78rem;color:var(--dim);font-weight:700;margin-bottom:8px">ניתוח מאזן בוחן</div>
+    ${tbl(['קטגוריה','יתרה','הערה'],rows)}
+    ${unknown.length?`<div class="banner warn" style="margin-top:12px">${svg('alert')}סעיפים לא ברורים לבדיקה: ${unknown.join(', ')}</div>`:''}
+    ${actions.replace('__L__','שמור ניתוח')}`;}
+
+function saveAnalysis(){if(!docAnalysis)return;S.analyses.unshift(docAnalysis);docAnalysis=null;docParsed=[];save();toast('הניתוח נשמר');render();}
+function delAnalysis(id){S.analyses=S.analyses.filter(a=>a.id!==id);save();render();}
+function screenDocs(){const d=DOCS[DOCTYPE];
+  return `<div class="card pad" style="max-width:820px;margin-bottom:16px">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
       <div style="width:46px;height:46px;border-radius:12px;background:var(--accent-soft);color:var(--accent-ink);display:grid;place-items:center">${svg('file','ic22')}</div>
       <div><div style="font-size:1.25rem;font-weight:800">ייבוא מסמכים</div><span class="chip acc" style="margin-top:4px">קליטה מבוקרת · אישור לפני עדכון</span></div></div>
-    <p style="color:var(--dim);font-size:.9rem;margin:12px 0">בוחרים סוג מסמך, המערכת מזהה נתונים ומציגה תצוגה מקדימה — הנתונים נכנסים <b>רק אחרי אישור</b>.</p>
-    <div style="display:flex;gap:8px;flex-wrap:wrap">${DOC_TYPES.map(([t,st])=>`<span class="chip ${st==='פעיל'?'good':''}">${t}${st==='פעיל'?' ✓':' · בקרוב'}</span>`).join('')}</div>
+    <div class="lbl">בחרו סוג מסמך</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">${DOC_ORDER.map(k=>`<span class="chip ${k===DOCTYPE?'acc':''}" style="cursor:pointer" onclick="setDocType('${k}')">${DOCS[k].icon} ${DOCS[k].label}</span>`).join('')}</div>
   </div>
-  <div class="card pad" style="max-width:780px;margin-bottom:16px">
-    <div style="font-weight:800;font-size:1.05rem;margin-bottom:2px">📋 ייבוא תמחיר עובדים <span class="chip good" style="vertical-align:middle">פעיל</span></div>
-    <p style="color:var(--dim);font-size:.88rem;margin:8px 0 12px">הדביקו את רשימת העובדים מגיליון התמחיר — שורה לכל עובד: <b>שם · תפקיד · עלות שעתית</b>. המערכת תזהה שמות, תפקידים ועלויות, ותקלוט אותם לרשימת העובדים. מה שחסר — נשלים ידנית.</p>
-    <textarea id="emp-import-txt" rows="6" class="field" style="resize:vertical;line-height:1.7" placeholder="יוסי כהן, טבח, 52&#10;דנה לוי, מלצרית, 38&#10;רות, מארחת, 40"></textarea>
+  <div class="card pad" style="max-width:820px;margin-bottom:16px">
+    <div style="font-weight:800;font-size:1.05rem;margin-bottom:2px">${d.icon} ${d.label} <span class="chip good" style="vertical-align:middle">פעיל</span></div>
+    <p style="color:var(--dim);font-size:.86rem;margin:8px 0 12px">${d.hint}. הדביקו את הנתונים ולחצו "נתח מסמך" — תוצג תצוגה מקדימה לפני קליטה.</p>
+    ${DOCTYPE==='z'?`<div style="margin-bottom:10px;max-width:220px"><label class="lbl">תאריך הדוח</label><input type="date" id="doc-date" value="${todayISO()}"></div>`:''}
+    ${['pl','purch','supp','sales','bal'].includes(DOCTYPE)?`<div style="margin-bottom:10px;max-width:280px"><label class="lbl">תקופה (אופציונלי)</label><input id="doc-period" placeholder="למשל: יוני 2026"></div>`:''}
+    <textarea id="doc-txt" rows="7" class="field" style="resize:vertical;line-height:1.7" placeholder="${d.sample.split('\n')[0]}&#10;${d.sample.split('\n')[1]||''}&#10;…"></textarea>
     <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
-      <button class="btn" onclick="parseEmpImport()">${svg('search')} נתח מסמך</button>
-      <button class="btn ghost" onclick="loadEmpSample()">טען דוגמה</button></div>
-    <div id="emp-import-preview" style="margin-top:14px"></div>
+      <button class="btn" onclick="analyzeDoc()">${svg('search')} נתח מסמך</button>
+      <button class="btn ghost" onclick="loadDocSample()">טען דוגמה</button></div>
+    <div id="doc-preview" style="margin-top:14px"></div>
   </div>
-  <div class="banner warn" style="max-width:780px">${svg('alert')}שאר סוגי המסמכים (Z יומי, רווח והפסד, מאזן, כרטסת, קניות, מכירות) דורשים עיבוד קבצים בצד שרת ואחסון מאובטח — ייבנו במערכת המלאה. מבנה הנתונים כבר מוכן.</div>`;
+  ${(S.analyses&&S.analyses.length)?`<div class="card pad" style="max-width:820px"><div style="font-weight:700;font-size:.85rem;margin-bottom:10px">ניתוחים שמורים (${S.analyses.length})</div>
+    <div class="grid" style="gap:8px">${S.analyses.map(a=>`<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 11px;background:var(--surface-2);border-radius:10px">
+      <div style="font-size:.85rem;min-width:0"><b>${DOCS[a.type]?DOCS[a.type].label:a.type}</b>${a.period?' · '+a.period:''} <span style="color:var(--mute)">· ${a.summary||''}</span></div>
+      <button class="x" onclick="delAnalysis('${a.id}')">${svg('x')}</button></div>`).join('')}</div></div>`:''}`;
 }
 
 /* ---------- modals ---------- */
@@ -1084,7 +1193,7 @@ window.openCash=openCash;window.saveCash=saveCash;window.openLead=openLead;windo
 window.openEmp=openEmp;window.saveEmp=saveEmp;window.delEmp=delEmp;window.openShift=openShift;window.saveShift=saveShift;window.delShift=delShift;
 window.openShiftDrawer=openShiftDrawer;window.setViewer=setViewer;window.setViewerEmp=setViewerEmp;window.weekNav=weekNav;
 window.approveApp=approveApp;window.removeApp=removeApp;window.applyShift=applyShift;window.setReq=setReq;window.addRole=addRole;window.saveShiftNotes=saveShiftNotes;
-window.parseEmpImport=parseEmpImport;window.renderEmpPreview=renderEmpPreview;window.confirmEmpImport=confirmEmpImport;window.loadEmpSample=loadEmpSample;
+window.setDocType=setDocType;window.analyzeDoc=analyzeDoc;window.loadDocSample=loadDocSample;window.confirmDoc=confirmDoc;window.renderDocPreview=renderDocPreview;window.delAnalysis=delAnalysis;
 window.saveSettings=saveSettings;window.sendZ=sendZ;window.render=render;
 window.feasInput=feasInput;window.toggleSel=toggleSel;window.saveEval=saveEval;window.loadEval=loadEval;window.delEval=delEval;window.moveToMenu=moveToMenu;
 render();

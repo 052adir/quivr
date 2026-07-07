@@ -126,6 +126,59 @@ export interface Shift {
   notes: string | null;
 }
 
+// מודול "ייבוא מסמכים"
+export type DocumentType =
+  | "z_daily" | "profit_loss" | "trial_balance"
+  | "suppliers_ledger" | "raw_material_purchases" | "sales_report";
+export interface UploadedDocument {
+  id: string;
+  document_type: DocumentType;
+  file_name: string | null;
+  file_path: string | null;
+  period_start: string | null;
+  period_end: string | null;
+  uploaded_by: string | null;
+  uploaded_at?: string;
+  status: "uploaded" | "parsed" | "approved" | "rejected";
+  notes: string | null;
+}
+export interface DocumentExtractedData {
+  id: string;
+  document_id: string;
+  field_name: string | null;
+  extracted_value: string | null;
+  target_table: string | null;
+  target_field: string | null;
+  existing_value: string | null;
+  confidence_score: number | null;
+  status: "pending" | "approved" | "rejected";
+}
+export interface ExpenseAnalysis {
+  id: string;
+  document_id: string | null;
+  period_start: string | null;
+  period_end: string | null;
+  revenue: number | null;
+  food_cost: number | null;
+  labor_cost: number | null;
+  rent: number | null;
+  utilities: number | null;
+  accounting: number | null;
+  marketing: number | null;
+  commissions: number | null;
+  delivery_costs: number | null;
+  other_expenses: number | null;
+  operating_profit: number | null;
+  net_profit: number | null;
+}
+export interface ExpenseRecommendation {
+  id: string;
+  analysis_id: string;
+  category: string | null;
+  severity: "green" | "yellow" | "red";
+  recommendation: string | null;
+}
+
 // מודול "לוח משמרות שבועי"
 export interface ShiftRequirement {
   id: string;

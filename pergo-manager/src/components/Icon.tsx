@@ -3,7 +3,7 @@ import {
   Utensils, BarChart3, Users, Mail, Receipt, Sparkles, Settings, TrendingUp,
   TrendingDown, TriangleAlert, Calendar, CircleAlert, Check, Plus, Trash2,
   Pencil, X, ChevronLeft, Menu, LogOut, ArrowUp, ArrowDown, Send, Download,
-  RefreshCw, Search, Phone, MapPin, Clock, type LucideIcon,
+  RefreshCw, Search, Phone, MapPin, Clock, FileUp, type LucideIcon,
 } from "lucide-react";
 
 const MAP: Record<string, LucideIcon> = {
@@ -42,6 +42,7 @@ const MAP: Record<string, LucideIcon> = {
   phone: Phone,
   "map-pin": MapPin,
   clock: Clock,
+  "file-up": FileUp,
 };
 
 export function Icon({ name, size = 20, className }: { name: string; size?: number; className?: string }) {

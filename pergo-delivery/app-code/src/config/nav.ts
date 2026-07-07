@@ -20,6 +20,7 @@ export const NAV: NavItem[] = [
   { href: "/reports", label: "דוחות", icon: "bar-chart-3", ready: true, group: "core" },
   { href: "/employees", label: "עובדים וסידור", icon: "users", ready: true, group: "future" },
   { href: "/z-report", label: "דוח Z יומי", icon: "mail", ready: true, group: "future" },
+  { href: "/documents", label: "ייבוא מסמכים", icon: "file-up", ready: false, group: "future" },
   { href: "/food-cost", label: "פוד קוסט", icon: "receipt", ready: false, group: "future" },
   { href: "/ai", label: "המלצות AI", icon: "sparkles", ready: false, group: "future" },
   { href: "/settings", label: "הגדרות", icon: "settings", ready: true, group: "future" },

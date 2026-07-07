@@ -181,6 +181,7 @@
   .x{background:var(--surface-2);border:none;border-radius:9px;width:32px;height:32px;cursor:pointer;color:var(--dim);display:grid;place-items:center}
   .x svg{width:17px;height:17px;stroke:var(--dim)}
   .ico16{width:16px;height:16px;stroke:var(--mute);flex:0 0 auto}
+  .ic22{width:22px;height:22px;stroke:currentColor}
   .toast{position:fixed;bottom:80px;inset-inline:0;margin:auto;width:max-content;max-width:88%;background:var(--ink);color:var(--surface);
     padding:10px 18px;border-radius:12px;font-weight:700;font-size:.86rem;z-index:60;opacity:0;transition:opacity .25s,transform .25s;transform:translateY(8px)}
   .toast.show{opacity:1;transform:translateY(0)}
@@ -236,6 +237,7 @@ const IC = {
   pencil:'<path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',
   target:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/>',
   beaker:'<path d="M9 3h6M10 3v5l-5 9a2 2 0 0 0 2 3h10a2 2 0 0 0 2-3l-5-9V3"/><path d="M6.5 14h11"/>',
+  file:'<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/>',
   users:'<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/>',
   mail:'<rect x="2" y="4" width="20" height="16" rx="2"/><path d="M2 7l10 6 10-6"/>',
   gear:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1V21a2 2 0 1 1-4 0v-.1A1.6 1.6 0 0 0 6.6 19.4a2 2 0 1 1-2.8-2.8l.1-.1A1.6 1.6 0 0 0 3 13.6H3a2 2 0 1 1 0-4h.1A1.6 1.6 0 0 0 4.6 6.6a2 2 0 1 1 2.8-2.8l.1.1A1.6 1.6 0 0 0 10 3V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 2.7 1.1l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8"/>'
@@ -384,7 +386,7 @@ function bars(data,color,fmt){
 const TABS=[['dash','דשבורד','dash'],['journal','יומן','journal'],['cashflow','תזרים','cash'],
   ['calendar','לוח שנה','calendar'],['tasks','משימות','tasks'],['leads','לקוחות','target'],
   ['menu','תפריט','menu'],['feas','בדיקת מנה','beaker'],['reports','דוחות','reports'],['employees','משמרות','users'],
-  ['zreport','דוח Z','mail'],['settings','הגדרות','gear']];
+  ['zreport','דוח Z','mail'],['docs','ייבוא מסמכים','file'],['settings','הגדרות','gear']];
 let TAB='dash';
 
 function screenDash(){
@@ -824,6 +826,32 @@ function moveToMenu(status){captureFeas();if(!FEAS.name){toast('הזינו שם 
   S.menu.push({id:'mn'+Date.now(),name:FEAS.name,category:FEAS.category,price:r.price||null,cost:N(FEAS.food)||null,status,campaign:r.camp[0]||null});
   save();toast('הועבר לתפריט ('+status+')');go('menu');}
 
+/* ---------- ייבוא מסמכים (בקרוב) ---------- */
+function screenDocs(){
+  const types=['Z יומי מהקופה','דוח רווח והפסד','מאזן בוחן','כרטסת ספקים','דוח קניות חומרי גלם','דוח מכירות תקופתי'];
+  return `<div class="card pad" style="max-width:740px">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px">
+      <div style="width:46px;height:46px;border-radius:12px;background:var(--accent-soft);color:var(--accent-ink);display:grid;place-items:center">${svg('file','ic22')}</div>
+      <div><div style="font-size:1.25rem;font-weight:800">ייבוא מסמכים</div><span class="chip acc" style="margin-top:4px">בקרוב · הארכיטקטורה מוכנה</span></div></div>
+    <p style="color:var(--dim);font-size:.9rem;margin:12px 0">העלאת מסמכים עסקיים, והמערכת מזהה וקולטת מהם נתונים למקומות הרלוונטיים — <b>רק לאחר אישור שלך</b>. בעת ההעלאה בוחרים תחילה את סוג המסמך (לא ניתן להעלות קובץ סתם).</p>
+    <div style="font-weight:700;font-size:.78rem;letter-spacing:.05em;text-transform:uppercase;color:var(--dim);margin:16px 0 9px">סוגי מסמכים בשלב ראשון</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">${types.map((t,i)=>`<span class="chip">${i+1}. ${t}</span>`).join('')}</div>
+    <div style="font-weight:700;font-size:.78rem;letter-spacing:.05em;text-transform:uppercase;color:var(--dim);margin:18px 0 9px">איך זה יעבוד</div>
+    <ol style="font-size:.9rem;color:var(--ink);padding-inline-start:18px;line-height:2;margin:0">
+      <li>בוחרים סוג מסמך, תאריך/טווח, ומעלים קובץ</li>
+      <li>לוחצים <b>נתח מסמך</b> — המערכת מזהה את הנתונים</li>
+      <li>מוצגת <b>טבלת תצוגה מקדימה</b>: נתון שנמצא · לאן ייכנס · ערך קיים · ערך חדש · סטטוס (תקין/דורש בדיקה)</li>
+      <li>רק בלחיצה על <b>אשר קליטה</b> הנתונים נכנסים למערכת</li>
+    </ol>
+    <div style="font-weight:700;font-size:.78rem;letter-spacing:.05em;text-transform:uppercase;color:var(--dim);margin:18px 0 9px">מסך נלווה — ניתוח הוצאות ויעדים</div>
+    <p style="font-size:.88rem;color:var(--dim);margin:0">טבלת סעיף · בפועל · % מהמחזור · יעד · פער · סטטוס · המלצה — כולל פוד קוסט/שכר/שכירות מול יעד, והמלצות AI לצמצום עלויות.</p>
+    <div class="banner warn" style="margin-top:18px">${svg('alert')}הנתונים לא מתעדכנים אוטומטית — כל שינוי דורש אישור. הקבצים יישמרו מאובטח (Supabase Storage), גלויים למורשים בלבד.</div>
+    <p style="font-size:.78rem;color:var(--mute);margin-top:12px">מודול זה דורש עיבוד קבצים בצד שרת (אחסון + זיהוי), ולכן ייבנה במערכת המלאה בענן. מבנה הנתונים —
+      <code style="font-size:.72rem">uploaded_documents</code>, <code style="font-size:.72rem">document_extracted_data</code>,
+      <code style="font-size:.72rem">expense_analysis</code>, <code style="font-size:.72rem">expense_recommendations</code> — כבר מוכן.</p>
+  </div>`;
+}
+
 /* ---------- modals ---------- */
 function modal(title,body,footer){
   document.getElementById('modal-root').innerHTML=`<div class="ov" onclick="if(event.target===this)closeModal()">
@@ -983,7 +1011,7 @@ function render(){
   document.getElementById('tabbar').innerHTML=TABS.map(([id,lbl,ic])=>
     `<button class="tab ${TAB===id?'on':''}" onclick="go('${id}')">${svg(ic)}${lbl}</button>`).join('');
   const scr={dash:screenDash,journal:screenJournal,cashflow:screenCashflow,calendar:screenCalendar,tasks:screenTasks,
-    leads:screenLeads,menu:screenMenu,feas:screenFeas,reports:screenReports,employees:screenEmployees,zreport:screenZreport,settings:screenSettings}[TAB];
+    leads:screenLeads,menu:screenMenu,feas:screenFeas,reports:screenReports,employees:screenEmployees,zreport:screenZreport,docs:screenDocs,settings:screenSettings}[TAB];
   document.getElementById('main').innerHTML=scr();
 }
 let toastT;function toast(m){const el=document.getElementById('toast');el.textContent=m;el.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>el.classList.remove('show'),1800);}

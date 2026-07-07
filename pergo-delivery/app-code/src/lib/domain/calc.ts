@@ -341,3 +341,52 @@ export function evaluateDish(f: Partial<DishEvaluation>): DishVerdict {
     campaignFit: [...new Set(campaignFit)],
   };
 }
+
+// ============================================================================
+// מודול "לוח משמרות שבועי" — חישוב מצב איוש למשמרת (טהור).
+// filled/missing לכל תפקיד, סטטוס (full/partial/critical), ועלות משוערת.
+// ============================================================================
+export type ShiftFillKey = "full" | "partially_missing" | "critical_missing";
+export interface ShiftFill {
+  perRole: { role: string; required: number; approved: number; missing: number }[];
+  totalMissing: number;
+  status: ShiftFillKey;
+  color: StatusLevel;
+  estimatedCost: number;
+}
+
+const CRITICAL_ROLE = "cook"; // טבח = תפקיד קריטי
+
+function hoursBetween(start?: string | null, end?: string | null): number {
+  const p = (t?: string | null) => {
+    if (!t) return 0;
+    const [h, m] = t.split(":").map(Number);
+    return h + (m || 0) / 60;
+  };
+  let d = p(end) - p(start);
+  if (d < 0) d += 24;
+  return d;
+}
+
+export function shiftFillStatus(
+  shift: { start_time?: string | null; end_time?: string | null },
+  requirements: { role: string; required_count: number }[],
+  assignments: { role: string; employee_id: string }[],
+  employees: { id: string; hourly_cost: number | null }[]
+): ShiftFill {
+  const empCost: Record<string, number> = {};
+  employees.forEach((e) => (empCost[e.id] = num(e.hourly_cost)));
+  const perRole = requirements
+    .filter((r) => r.required_count > 0)
+    .map((r) => {
+      const approved = assignments.filter((a) => a.role === r.role).length;
+      return { role: r.role, required: r.required_count, approved, missing: Math.max(0, r.required_count - approved) };
+    });
+  const totalMissing = perRole.reduce((s, r) => s + r.missing, 0);
+  const critical = perRole.some((r) => r.role === CRITICAL_ROLE && r.missing > 0);
+  const status: ShiftFillKey = totalMissing === 0 ? "full" : critical ? "critical_missing" : "partially_missing";
+  const color: StatusLevel = status === "full" ? "good" : status === "critical_missing" ? "bad" : "warn";
+  const hours = hoursBetween(shift.start_time, shift.end_time);
+  const estimatedCost = assignments.reduce((s, a) => s + (empCost[a.employee_id] ?? 0) * hours, 0);
+  return { perRole, totalMissing, status, color, estimatedCost };
+}

@@ -126,6 +126,30 @@ export interface Shift {
   notes: string | null;
 }
 
+// מודול "לוח משמרות שבועי"
+export interface ShiftRequirement {
+  id: string;
+  shift_id: string;
+  role: string;           // cook / waitress / hostess
+  required_count: number;
+}
+export interface ShiftApplication {
+  id: string;
+  shift_id: string;
+  employee_id: string;
+  role: string;
+  status: "pending" | "approved" | "rejected";
+  created_at?: string;
+}
+export interface ShiftAssignment {
+  id: string;
+  shift_id: string;
+  employee_id: string;
+  role: string;
+  approved_by: string | null;
+  created_at?: string;
+}
+
 // מודול "בדיקת מנה חדשה"
 export interface DishEvaluation {
   id: string;

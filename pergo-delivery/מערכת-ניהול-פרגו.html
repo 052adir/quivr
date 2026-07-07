@@ -251,12 +251,29 @@ function defaults(){ return {
     {id:'ld1',name:'ישיבת צור הדסה',category:'ישיבה',contact:'הרב כהן',role:'ראש ישיבה',phone:'050-1234567',tasting:'מגש פיצות',letter:true,stage:'שיחת מעקב',notes:null},
     {id:'ld2',name:'בית ספר הראל',category:'בית ספר',contact:'המזכירה',role:null,phone:null,tasting:'סלמון',letter:false,stage:'אותר',notes:null}
   ],
-  employees:[
-    {id:'em1',name:'יוסי',role:'פיצייה',cost:42,employer:55,status:'פעיל'},
-    {id:'em2',name:'דנה',role:'מלצר',cost:38,employer:50,status:'פעיל'}
-  ],
-  shifts:[],evaluations:[],feasDraft:null }; }
-function load(){ const base=defaults(); try{const r=localStorage.getItem(LS); if(r) return {...base,...JSON.parse(r)};}catch(e){} return base; }
+  employees:seedEmployees(),shifts:seedShifts(),shiftApps:seedApps(),
+  evaluations:[],feasDraft:null,viewer:{mode:'manager',empId:null},weekOffset:0,_v:2 }; }
+function seedEmployees(){return [
+  {id:'em1',name:'יוסי כהן',phone:'050-1111111',role:'טבח',hourly_cost:52,status:'פעיל',notes:null},
+  {id:'em2',name:'דנה לוי',phone:'050-2222222',role:'מלצרית',hourly_cost:38,status:'פעיל',notes:null},
+  {id:'em3',name:'מאיה',phone:'050-3333333',role:'מלצרית',hourly_cost:38,status:'פעיל',notes:null},
+  {id:'em4',name:'רות',phone:'050-4444444',role:'מארחת',hourly_cost:40,status:'פעיל',notes:null},
+  {id:'em5',name:'אבי',phone:'050-5555555',role:'טבח',hourly_cost:55,status:'פעיל',notes:null},
+  {id:'em6',name:'מרדכי',phone:'050-6666666',role:'מנהל',hourly_cost:0,status:'פעיל',notes:null}];}
+function seedShifts(){const wk=weekDates(0),out=[];wk.forEach(d=>{
+  out.push({id:'sh_'+d+'_m',date:d,type:'בוקר',start:'09:00',end:'16:00',notes:null,req:{'טבח':1,'מלצרית':1,'מארחת':0}});
+  out.push({id:'sh_'+d+'_e',date:d,type:'ערב',start:'16:00',end:'23:00',notes:null,req:{'טבח':1,'מלצרית':2,'מארחת':1}});});
+  return out;}
+function seedApps(){const wk=weekDates(0);return [
+  {id:'a1',shiftId:'sh_'+wk[0]+'_m',empId:'em1',role:'טבח',status:'approved'},
+  {id:'a2',shiftId:'sh_'+wk[0]+'_m',empId:'em2',role:'מלצרית',status:'approved'},
+  {id:'a3',shiftId:'sh_'+wk[0]+'_e',empId:'em5',role:'טבח',status:'approved'},
+  {id:'a4',shiftId:'sh_'+wk[0]+'_e',empId:'em3',role:'מלצרית',status:'approved'},
+  {id:'a5',shiftId:'sh_'+wk[0]+'_e',empId:'em2',role:'מלצרית',status:'pending'},
+  {id:'a6',shiftId:'sh_'+wk[1]+'_e',empId:'em4',role:'מארחת',status:'approved'}];}
+function load(){ const base=defaults(); try{const r=localStorage.getItem(LS); if(r){const p=JSON.parse(r),m={...base,...p};
+  if(p._v!==2){m.employees=base.employees;m.shifts=base.shifts;m.shiftApps=base.shiftApps;m.viewer=base.viewer;m.weekOffset=0;m._v=2;}
+  return m;}}catch(e){} return base; }
 let S=load();
 function save(){ try{localStorage.setItem(LS,JSON.stringify(S));}catch(e){} }
 function resetAll(){ localStorage.removeItem(LS); S=load(); render(); toast('אופס לנתוני ברירת המחדל'); }
@@ -366,7 +383,7 @@ function bars(data,color,fmt){
 /* ---------- screens ---------- */
 const TABS=[['dash','דשבורד','dash'],['journal','יומן','journal'],['cashflow','תזרים','cash'],
   ['calendar','לוח שנה','calendar'],['tasks','משימות','tasks'],['leads','לקוחות','target'],
-  ['menu','תפריט','menu'],['feas','בדיקת מנה','beaker'],['reports','דוחות','reports'],['employees','עובדים','users'],
+  ['menu','תפריט','menu'],['feas','בדיקת מנה','beaker'],['reports','דוחות','reports'],['employees','משמרות','users'],
   ['zreport','דוח Z','mail'],['settings','הגדרות','gear']];
 let TAB='dash';
 
@@ -543,26 +560,116 @@ function screenLeads(){
       ${svg('pencil','ico16')}</div>`).join('')}</div>`:`<div class="card empty"><b>אין לקוחות עדיין</b>הוסיפו בית ספר, ישיבה, עסק או מוסד</div>`}`;
 }
 
-function weekDates(){const now=new Date(todayISO()+'T00:00:00'),sun=new Date(now);sun.setDate(now.getDate()-now.getDay());
+/* ---------- לוח משמרות שבועי ---------- */
+const ROLES_HE=['טבח','מלצרית','מארחת','מנהל'];
+const CRIT='טבח'; // תפקיד קריטי
+function weekDates(off=0){const now=new Date();now.setHours(0,0,0,0);const sun=new Date(now);sun.setDate(now.getDate()-now.getDay()+off*7);
   return Array.from({length:7},(_,i)=>{const d=new Date(sun);d.setDate(sun.getDate()+i);return d.toISOString().slice(0,10);});}
+function empById(){const m={};S.employees.forEach(e=>m[e.id]=e);return m;}
+function approvedOf(sid,role){return S.shiftApps.filter(a=>a.shiftId===sid&&a.role===role&&a.status==='approved');}
+function pendingOf(sid,role){return S.shiftApps.filter(a=>a.shiftId===sid&&a.role===role&&a.status==='pending');}
+function shiftRoles(s){return Object.keys(s.req||{}).filter(r=>N(s.req[r])>0);}
+function shiftStatus(s){const miss=[];let crit=false;
+  shiftRoles(s).forEach(r=>{const m=N(s.req[r])-approvedOf(s.id,r).length;if(m>0){miss.push({role:r,count:m});if(r===CRIT)crit=true;}});
+  if(!miss.length)return {key:'full',color:'good',miss};
+  return crit?{key:'critical',color:'bad',miss}:{key:'partial',color:'warn',miss};}
+function hoursOf(s){const p=t=>{if(!t)return 0;const a=t.split(':');return +a[0]+(+a[1]||0)/60;};let d=p(s.end)-p(s.start);if(d<0)d+=24;return d;}
+function shiftCost(s){const h=hoursOf(s),m=empById();
+  return S.shiftApps.filter(a=>a.shiftId===s.id&&a.status==='approved').reduce((t,a)=>t+N(m[a.empId]&&m[a.empId].hourly_cost)*h,0);}
+function weekStats(wk){const shifts=S.shifts.filter(s=>wk.includes(s.date));
+  let full=0,openS=0,missing=0,cost=0;const missDays=new Set(),missRoles={};
+  shifts.forEach(s=>{const st=shiftStatus(s);cost+=shiftCost(s);
+    if(st.key==='full')full++;else{openS++;st.miss.forEach(m=>{missing+=m.count;missRoles[m.role]=(missRoles[m.role]||0)+m.count;missDays.add(s.date);});}});
+  return {total:shifts.length,full,openS,missing,cost,missDays:[...missDays],missRoles};}
+
 function screenEmployees(){
-  const wk=weekDates(),byId={};S.employees.forEach(e=>byId[e.id]=e);
-  const ws=S.shifts.filter(s=>wk.includes(s.date)),hrs=ws.reduce((s,x)=>s+N(x.hours),0);
-  const cost=ws.reduce((s,x)=>{const e=byId[x.emp];return s+N(e&&(e.employer||e.cost))*N(x.hours);},0);
-  return `<div class="sec"><h2>מצבת שבועית</h2><div class="grid kpis" style="margin-bottom:12px">
-    ${kpi('סך שעות מתוכננות',nf(hrs),'clock')}${kpi('עלות שכר צפויה',money(cost),'cash',cost>0?'warn':null)}${kpi('עובדים פעילים',nf(S.employees.filter(e=>e.status==='פעיל').length),'users')}</div>
-    <div class="card tscroll"><table><thead><tr><th>יום</th><th>תאריך</th><th>משמרות</th><th>שעות</th><th></th></tr></thead><tbody>
-    ${wk.map((d,i)=>{const sh=ws.filter(s=>s.date===d),h=sh.reduce((s,x)=>s+N(x.hours),0);
-      return `<tr><td style="font-weight:700">${WD[i]}</td><td style="color:var(--dim)">${gregS(d)}</td>
-      <td><div style="display:flex;gap:5px;flex-wrap:wrap">${sh.length?sh.map(s=>`<span class="chip" onclick="delShift('${s.id}')" style="cursor:pointer">${byId[s.emp]?byId[s.emp].name:'לא שובץ'} · ${s.type||''} ${N(s.hours)}ש׳</span>`).join(''):'<span style="color:var(--mute)">—</span>'}</div></td>
-      <td class="tnum">${h||'—'}</td><td><button class="btn ghost sm" onclick="openShift('${d}')">${svg('plus')}</button></td></tr>`;}).join('')}</tbody></table></div></div>
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><h2 style="font-size:1rem;font-weight:800">עובדים (${S.employees.length})</h2>
-      <button class="btn" onclick="openEmp()">${svg('plus')} עובד</button></div>
-    <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(215px,1fr))">${S.employees.map(e=>`<div class="card pad" style="cursor:pointer" onclick="openEmp('${e.id}')">
-      <div style="display:flex;justify-content:space-between;align-items:start"><b>${e.name}</b><span class="chip ${e.status==='פעיל'?'good':e.status==='סיים'?'bad':'warn'}">${e.status}</span></div>
-      <div style="font-size:.78rem;color:var(--dim);margin-top:4px">${e.role||'—'}</div>
-      ${e.cost!=null?`<div style="font-size:.78rem;margin-top:4px">עלות שעתית: <b class="tnum">${money(e.cost)}</b></div>`:''}</div>`).join('')}</div>`;
+  const wk=weekDates(S.weekOffset||0),m=empById();
+  const isMgr=(!S.viewer||S.viewer.mode==='manager');
+  const vEmp=(!isMgr&&S.viewer.empId)?m[S.viewer.empId]:null;
+  const ws=weekStats(wk);
+  const empOpts=S.employees.filter(e=>e.role!=='מנהל').map(e=>`<option value="${e.id}" ${vEmp&&vEmp.id===e.id?'selected':''}>${e.name} · ${e.role}</option>`).join('');
+  let h=`<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px">
+    <div style="display:flex;gap:6px;align-items:center">
+      <span class="chip ${isMgr?'acc':''}" style="cursor:pointer" onclick="setViewer('manager')">👔 מנהל</span>
+      <span class="chip ${!isMgr?'acc':''}" style="cursor:pointer" onclick="setViewer('employee')">🧑‍🍳 עובד</span>
+      ${!isMgr?`<select onchange="setViewerEmp(this.value)" style="width:auto">${empOpts}</select>`:''}</div>
+    <div style="display:flex;gap:6px;align-items:center;margin-inline-start:auto">
+      <button class="btn ghost sm" onclick="weekNav(-1)">← קודם</button>
+      <span class="chip">${gregS(wk[0])} – ${gregS(wk[6])}</span>
+      <button class="btn ghost sm" onclick="weekNav(1)">הבא →</button>
+      ${isMgr?`<button class="btn sm" onclick="openShift()">${svg('plus')} משמרת</button>`:''}</div></div>`;
+  if(isMgr){
+    h+=`<div class="grid kpis" style="margin-bottom:14px">
+      ${kpi('משמרות מלאות',ws.full+'/'+ws.total,'check','good')}
+      ${kpi('משמרות חסרות',String(ws.openS),'alert',ws.openS?'warn':'good')}
+      ${kpi('סה״כ חוסרים',String(ws.missing),'users',ws.missing?'bad':'good')}
+      ${kpi('עלות שכר שבועית',money(ws.cost),'cash','warn')}</div>`;
+    if(ws.missing)h+=`<div class="banner bad" style="margin-bottom:14px">${svg('alert')}חסרים: ${Object.entries(ws.missRoles).map(([r,c])=>r+'×'+c).join(' · ')} · בימים: ${[...new Set(ws.missDays.map(d=>WD[new Date(d).getDay()]))].join(', ')}</div>`;
+  } else if(vEmp){
+    h+=`<div class="banner" style="background:var(--accent-soft);color:var(--accent-ink);margin-bottom:14px">${svg('users')}שלום ${vEmp.name} — מוצגות רק משמרות שדורשות ${vEmp.role}. לחצו על משמרת פנויה כדי להירשם.</div>`;
+  }
+  h+=`<div class="tscroll"><div style="display:flex;gap:10px;min-width:840px">`;
+  wk.forEach((d,i)=>{
+    const ds=S.shifts.filter(s=>s.date===d).filter(s=>isMgr||(vEmp&&N((s.req||{})[vEmp.role])>0));
+    h+=`<div style="flex:1;min-width:150px"><div style="text-align:center;padding:8px;border-radius:10px;background:var(--surface-2);margin-bottom:8px">
+      <div style="font-weight:800">${WD[i]}</div><div style="font-size:.72rem;color:var(--dim)">${gregS(d)}</div></div>
+      <div style="display:flex;flex-direction:column;gap:8px">`;
+    if(!ds.length)h+=`<div style="text-align:center;color:var(--mute);font-size:.76rem;padding:6px">—</div>`;
+    ds.forEach(s=>{const st=shiftStatus(s);
+      h+=`<div class="card" style="padding:10px;cursor:pointer;border-inline-start:4px solid var(--${st.color})" onclick="openShiftDrawer('${s.id}')">
+        <div style="display:flex;justify-content:space-between;align-items:center"><b style="font-size:.86rem">${s.type}</b><span style="font-size:.66rem;color:var(--mute)">${s.start}-${s.end}</span></div>
+        <div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:6px">${shiftRoles(s).map(r=>{const ap=approvedOf(s.id,r).length,met=ap>=N(s.req[r]);
+          return `<span class="chip ${met?'good':(r===CRIT?'bad':'warn')}" style="font-size:.64rem;padding:2px 6px">${r} ${ap}/${N(s.req[r])}</span>`;}).join('')}</div></div>`;});
+    h+=`</div></div>`;});
+  h+=`</div></div>`;
+  if(isMgr){h+=`<div class="sec" style="margin-top:24px"><h2>ניהול עובדים (${S.employees.length})</h2>
+    <div style="display:flex;justify-content:flex-end;margin-bottom:10px"><button class="btn sm" onclick="openEmp()">${svg('plus')} עובד</button></div>
+    <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(205px,1fr))">${S.employees.map(e=>`<div class="card pad" style="cursor:pointer" onclick="openEmp('${e.id}')">
+      <div style="display:flex;justify-content:space-between;align-items:start"><b>${e.name}</b><span class="chip ${e.status==='פעיל'?'good':'warn'}">${e.status}</span></div>
+      <div style="font-size:.76rem;color:var(--dim);margin-top:4px">${e.role} · ${e.phone||''}</div>
+      <div style="font-size:.76rem;margin-top:3px">${money(e.hourly_cost)}/שעה</div></div>`).join('')}</div></div>`;}
+  return h;
 }
+function openShiftDrawer(id){
+  const s=S.shifts.find(x=>x.id===id);if(!s)return;
+  const isMgr=(!S.viewer||S.viewer.mode==='manager'),m=empById();
+  const vEmp=(!isMgr&&S.viewer.empId)?m[S.viewer.empId]:null,st=shiftStatus(s);
+  let b=`<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
+      <span class="chip ${st.color}">${st.key==='full'?'מלא':st.key==='critical'?'חסר קריטי':'חסר חלקית'}</span>
+      <span style="color:var(--dim);font-size:.84rem">${WD[new Date(s.date).getDay()]} · ${gregD(s.date)} · ${s.start}-${s.end}</span></div>
+    <div style="font-size:.8rem;color:var(--dim);margin-bottom:12px">עלות שכר משוערת: <b>${money(shiftCost(s))}</b> · ${hoursOf(s)} שעות</div>`;
+  shiftRoles(s).forEach(r=>{const ap=approvedOf(s.id,r),pe=pendingOf(s.id,r),need=N(s.req[r]);
+    b+=`<div class="card pad" style="margin-bottom:10px"><div style="display:flex;justify-content:space-between;align-items:center">
+      <b>${r}</b><span class="chip ${ap.length>=need?'good':(r===CRIT?'bad':'warn')}">${ap.length}/${need} שובצו</span></div>`;
+    ap.forEach(a=>b+=`<div style="display:flex;justify-content:space-between;align-items:center;margin-top:7px;font-size:.85rem">
+      <span style="color:var(--good)">✓ ${m[a.empId]?m[a.empId].name:'?'}</span>${isMgr?`<button class="chip bad" style="cursor:pointer" onclick="removeApp('${a.id}')">הסר</button>`:''}</div>`);
+    pe.forEach(a=>b+=`<div style="display:flex;justify-content:space-between;align-items:center;margin-top:7px;font-size:.85rem">
+      <span style="color:var(--warn)">⏳ ${m[a.empId]?m[a.empId].name:'?'}</span>
+      ${isMgr?`<span style="display:flex;gap:5px"><button class="chip good" style="cursor:pointer" onclick="approveApp('${a.id}')">אשר</button><button class="chip bad" style="cursor:pointer" onclick="removeApp('${a.id}')">דחה</button></span>`:''}</div>`);
+    if(vEmp&&vEmp.role===r){const mine=S.shiftApps.find(a=>a.shiftId===s.id&&a.empId===vEmp.id);
+      if(mine)b+=`<div style="margin-top:9px;font-size:.85rem;color:${mine.status==='approved'?'var(--good)':'var(--warn)'}">${mine.status==='approved'?'✓ שובצת למשמרת':'⏳ נרשמת — ממתין לאישור מנהל'}</div>`;
+      else b+=`<button class="btn" style="margin-top:9px;width:100%" onclick="applyShift('${s.id}','${r}')">${svg('check')} אני פנוי / הירשם למשמרת</button>`;}
+    if(isMgr)b+=`<div style="display:flex;gap:6px;margin-top:9px;align-items:center"><span style="font-size:.74rem;color:var(--dim)">דרישה:</span>
+      <button class="chip" style="cursor:pointer" onclick="setReq('${s.id}','${r}',-1)">−</button><span class="chip">${need}</span>
+      <button class="chip" style="cursor:pointer" onclick="setReq('${s.id}','${r}',1)">+</button></div>`;
+    b+=`</div>`;});
+  if(isMgr)b+=`<div style="margin-top:4px"><label class="lbl">הערות מנהל</label><input id="sh_notes" value="${s.notes||''}" onchange="saveShiftNotes('${s.id}',this.value)"></div>
+    <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;align-items:center">
+      <select id="sh_addrole" style="width:auto"><option value="">הוסף דרישת תפקיד…</option>${ROLES_HE.filter(r=>r!=='מנהל'&&!(N((s.req||{})[r])>0)).map(r=>`<option>${r}</option>`).join('')}</select>
+      <button class="btn ghost sm" onclick="addRole('${s.id}')">${svg('plus')} הוסף</button>
+      <button class="btn ghost sm" style="color:var(--bad);margin-inline-start:auto" onclick="delShift('${s.id}')">${svg('trash-2')} מחק</button></div>`;
+  modal(s.type+' · '+WD[new Date(s.date).getDay()],b);
+}
+function setViewer(mode){const first=S.employees.find(e=>e.role!=='מנהל');S.viewer={mode,empId:mode==='employee'?((S.viewer&&S.viewer.empId)||(first&&first.id)):null};save();render();}
+function setViewerEmp(id){S.viewer={mode:'employee',empId:id};save();render();}
+function weekNav(d){S.weekOffset=(S.weekOffset||0)+d;save();render();}
+function approveApp(id){const a=S.shiftApps.find(x=>x.id===id);if(a)a.status='approved';save();render();openShiftDrawer(a.shiftId);}
+function removeApp(id){const a=S.shiftApps.find(x=>x.id===id),sid=a&&a.shiftId;S.shiftApps=S.shiftApps.filter(x=>x.id!==id);save();render();if(sid)openShiftDrawer(sid);}
+function applyShift(sid,role){if(!S.viewer||!S.viewer.empId)return;
+  S.shiftApps.push({id:'ap'+Date.now(),shiftId:sid,empId:S.viewer.empId,role,status:'pending'});save();render();openShiftDrawer(sid);toast('נרשמת — ממתין לאישור מנהל');}
+function setReq(sid,role,delta){const s=S.shifts.find(x=>x.id===sid);s.req=s.req||{};s.req[role]=Math.max(0,N(s.req[role])+delta);save();render();openShiftDrawer(sid);}
+function addRole(sid){const v=document.getElementById('sh_addrole').value;if(!v)return;const s=S.shifts.find(x=>x.id===sid);s.req=s.req||{};s.req[v]=Math.max(1,N(s.req[v]));save();render();openShiftDrawer(sid);}
+function saveShiftNotes(sid,v){const s=S.shifts.find(x=>x.id===sid);if(s)s.notes=v||null;save();}
 
 let zDate=null,zMails='';
 function screenZreport(){
@@ -830,28 +937,37 @@ function saveLead(id){const g=x=>document.getElementById(x).value;if(!g('l_name'
   if(id){Object.assign(S.leads.find(x=>x.id===id),o);}else{o.id='ld'+Date.now();S.leads.unshift(o);}save();closeModal();render();toast('נשמר');}
 function delLead(id){S.leads=S.leads.filter(x=>x.id!==id);save();closeModal();render();toast('נמחק');}
 
-function openEmp(id){const e=id?S.employees.find(x=>x.id===id):{status:'פעיל'};const opt=(a,v)=>a.map(o=>`<option ${o===v?'selected':''}>${o}</option>`).join('');
+function openEmp(id){const e=id?S.employees.find(x=>x.id===id):{status:'פעיל',role:'מלצרית'};const opt=(a,v)=>a.map(o=>`<option ${o===v?'selected':''}>${o}</option>`).join('');
   modal(id?'עריכת עובד':'עובד חדש',
-   `<div style="display:grid;gap:11px"><div><label class="lbl">שם</label><input id="e_name" value="${e.name||''}"></div>
-    <div class="fgrid"><div><label class="lbl">תפקיד</label><select id="e_role"><option value=""></option>${opt(['מנהל משמרת','טבח','פיצייה','מלצר','משלוחים','קופה','עזר מטבח'],e.role)}</select></div>
+   `<div style="display:grid;gap:11px"><div class="fgrid"><div><label class="lbl">שם</label><input id="e_name" value="${e.name||''}"></div>
+      <div><label class="lbl">טלפון</label><input id="e_phone" value="${e.phone||''}" style="direction:ltr"></div>
+      <div><label class="lbl">תפקיד</label><select id="e_role">${opt(ROLES_HE,e.role)}</select></div>
       <div><label class="lbl">סטטוס</label><select id="e_status">${opt(['פעיל','בהשהיה','סיים'],e.status)}</select></div>
-      <div><label class="lbl">עלות שעתית (₪)</label><input type="number" id="e_cost" value="${e.cost??''}"></div>
-      <div><label class="lbl">עלות מעסיק לשעה (₪)</label><input type="number" id="e_emp" value="${e.employer??''}"></div></div></div>`,
+      <div><label class="lbl">עלות שעתית (₪)</label><input type="number" id="e_cost" value="${e.hourly_cost??''}"></div></div>
+      <div><label class="lbl">הערות</label><input id="e_notes" value="${e.notes||''}"></div></div>`,
    `<button class="btn" onclick="saveEmp('${id||''}')">${svg('check')} שמירה</button>${id?`<button class="btn ghost" style="color:var(--bad)" onclick="delEmp('${id}')">מחיקה</button>`:''}`);}
 function saveEmp(id){const g=x=>document.getElementById(x).value;if(!g('e_name'))return;
-  const o={name:g('e_name'),role:g('e_role')||null,status:g('e_status'),cost:g('e_cost')===''?null:N(g('e_cost')),employer:g('e_emp')===''?null:N(g('e_emp'))};
+  const o={name:g('e_name'),phone:g('e_phone')||null,role:g('e_role'),status:g('e_status'),hourly_cost:g('e_cost')===''?null:N(g('e_cost')),notes:g('e_notes')||null};
   if(id){Object.assign(S.employees.find(x=>x.id===id),o);}else{o.id='em'+Date.now();S.employees.push(o);}save();closeModal();render();toast('נשמר');}
-function delEmp(id){S.employees=S.employees.filter(x=>x.id!==id);S.shifts=S.shifts.filter(s=>s.emp!==id);save();closeModal();render();toast('נמחק');}
+function delEmp(id){S.employees=S.employees.filter(x=>x.id!==id);S.shiftApps=S.shiftApps.filter(a=>a.empId!==id);save();closeModal();render();toast('נמחק');}
 
-function openShift(date){const opt=S.employees.map(e=>`<option value="${e.id}">${e.name}</option>`).join('');
-  modal('הוספת משמרת · '+gregS(date),
-   `<div style="display:grid;gap:11px"><div><label class="lbl">עובד</label><select id="sh_emp"><option value="">לא שובץ</option>${opt}</select></div>
-    <div class="fgrid"><div><label class="lbl">משמרת</label><select id="sh_type"><option>בוקר</option><option>צהריים</option><option selected>ערב</option></select></div>
-      <div><label class="lbl">שעות מתוכננות</label><input type="number" id="sh_hours" value="8"></div></div></div>`,
-   `<button class="btn" onclick="saveShift('${date}')">${svg('check')} הוספה</button>`);}
-function saveShift(date){S.shifts.push({id:'sh'+Date.now(),date,emp:document.getElementById('sh_emp').value||null,type:document.getElementById('sh_type').value,hours:N(document.getElementById('sh_hours').value)});
-  save();closeModal();render();toast('משמרת נוספה');}
-function delShift(id){S.shifts=S.shifts.filter(x=>x.id!==id);save();render();}
+function openShift(){const wk=weekDates(S.weekOffset||0);
+  modal('משמרת חדשה',
+   `<div style="display:grid;gap:11px"><div class="fgrid">
+     <div><label class="lbl">תאריך</label><input type="date" id="ns_date" value="${wk[0]}"></div>
+     <div><label class="lbl">סוג משמרת</label><select id="ns_type"><option>בוקר</option><option selected>ערב</option><option>מוצ״ש / לילה</option></select></div>
+     <div><label class="lbl">שעת התחלה</label><input type="time" id="ns_start" value="16:00"></div>
+     <div><label class="lbl">שעת סיום</label><input type="time" id="ns_end" value="23:00"></div>
+     <div><label class="lbl">טבחים דרושים</label><input type="number" id="ns_cook" value="1"></div>
+     <div><label class="lbl">מלצריות דרושות</label><input type="number" id="ns_wait" value="2"></div>
+     <div><label class="lbl">מארחות דרושות</label><input type="number" id="ns_host" value="0"></div></div>
+     <div><label class="lbl">הערות</label><input id="ns_notes"></div></div>`,
+   `<button class="btn" onclick="saveShift()">${svg('check')} יצירת משמרת</button>`);}
+function saveShift(){const g=id=>document.getElementById(id).value;if(!g('ns_date'))return;
+  S.shifts.push({id:'sh'+Date.now(),date:g('ns_date'),type:g('ns_type'),start:g('ns_start'),end:g('ns_end'),notes:g('ns_notes')||null,
+    req:{'טבח':N(g('ns_cook')),'מלצרית':N(g('ns_wait')),'מארחת':N(g('ns_host'))}});
+  save();closeModal();render();toast('המשמרת נוצרה');}
+function delShift(id){S.shifts=S.shifts.filter(x=>x.id!==id);S.shiftApps=S.shiftApps.filter(a=>a.shiftId!==id);save();closeModal();render();toast('המשמרת נמחקה');}
 
 /* ---------- render ---------- */
 function go(t){TAB=t;render();window.scrollTo(0,0);}
@@ -877,6 +993,8 @@ window.openDish=openDish;window.saveDish=saveDish;window.delDish=delDish;window.
 window.closeModal=closeModal;window.resetAll=resetAll;
 window.openCash=openCash;window.saveCash=saveCash;window.openLead=openLead;window.saveLead=saveLead;window.delLead=delLead;
 window.openEmp=openEmp;window.saveEmp=saveEmp;window.delEmp=delEmp;window.openShift=openShift;window.saveShift=saveShift;window.delShift=delShift;
+window.openShiftDrawer=openShiftDrawer;window.setViewer=setViewer;window.setViewerEmp=setViewerEmp;window.weekNav=weekNav;
+window.approveApp=approveApp;window.removeApp=removeApp;window.applyShift=applyShift;window.setReq=setReq;window.addRole=addRole;window.saveShiftNotes=saveShiftNotes;
 window.saveSettings=saveSettings;window.sendZ=sendZ;window.render=render;
 window.feasInput=feasInput;window.toggleSel=toggleSel;window.saveEval=saveEval;window.loadEval=loadEval;window.delEval=delEval;window.moveToMenu=moveToMenu;
 render();

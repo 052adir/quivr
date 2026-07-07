@@ -4,8 +4,9 @@ import { useState } from "react";
 import { useData } from "@/hooks/useData";
 import { repo, update } from "@/lib/repo";
 import type { CalendarDay } from "@/lib/domain/types";
-import { DataState, EmptyState, Badge } from "@/components/ui";
+import { DataState, EmptyState, Badge, DrillBanner } from "@/components/ui";
 import { gregDate, todayISO } from "@/lib/format";
+import { useDrill } from "@/hooks/useDrill";
 
 const STATUSES = ["פתוח", "בתהליך", "בוצע"];
 const MAJOR = new Set(["בין המצרים", "תשעת הימים", "תשעה באב", "ט״ו באב", "ראש השנה", "יום כיפור", "סוכות", "חנוכה", "פורים", "פסח", "שבועות"]);
@@ -14,9 +15,11 @@ export default function CalendarPage() {
   const { data, loading, error, configured, reload } = useData(() => repo.calendar());
   const [onlyHolidays, setOnlyHolidays] = useState(true);
   const today = todayISO();
+  const drill = useDrill();
 
   return (
     <DataState configured={configured} loading={loading} error={error}>
+      <DrillBanner label={drill.label} />
       <div className="flex gap-1.5 mb-4">
         <Chip active={onlyHolidays} onClick={() => setOnlyHolidays(true)}>חגים ואירועים</Chip>
         <Chip active={!onlyHolidays} onClick={() => setOnlyHolidays(false)}>כל הימים המסומנים</Chip>

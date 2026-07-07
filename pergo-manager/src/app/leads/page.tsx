@@ -4,9 +4,10 @@ import { useState } from "react";
 import { useData } from "@/hooks/useData";
 import { repo, insert, update, remove } from "@/lib/repo";
 import type { Lead, FunnelStage } from "@/lib/domain/types";
-import { DataState, EmptyState, Badge, Section } from "@/components/ui";
+import { DataState, EmptyState, Badge, Section, DrillBanner } from "@/components/ui";
 import { Modal, Field } from "@/components/Modal";
 import { Icon } from "@/components/Icon";
+import { useDrill } from "@/hooks/useDrill";
 
 const STAGES: FunnelStage[] = ["אותר", "טעימה נשלחה", "שיחת מעקב", "הזמנה ראשונה", "לקוח קבוע"];
 const CATEGORIES = ["בית ספר", "ישיבה", "עסק", "משרד", "מוסד"];
@@ -16,6 +17,7 @@ const TARGETS: Record<FunnelStage, number> = { "אותר": 100, "טעימה נש
 export default function LeadsPage() {
   const { data, loading, error, configured, reload } = useData(() => repo.leads());
   const [edit, setEdit] = useState<Partial<Lead> | null>(null);
+  const drill = useDrill();
 
   return (
     <DataState configured={configured} loading={loading} error={error}>
@@ -23,8 +25,11 @@ export default function LeadsPage() {
         // count reached-at-least-this-stage
         const idx = (s: string) => STAGES.indexOf(s as FunnelStage);
         const reached = (stage: FunnelStage) => data.filter((l) => idx(l.funnel_stage) >= idx(stage)).length;
+        const shown = drill.filter === "הזמנה ראשונה" ? data.filter((l) => idx(l.funnel_stage) >= idx("הזמנה ראשונה"))
+          : drill.filter === "לקוח קבוע" ? data.filter((l) => l.funnel_stage === "לקוח קבוע") : data;
         return (
           <>
+            <DrillBanner label={drill.label} />
             <Section title="משפך לקוחות עסקיים (יעד רבעוני)">
               <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))" }}>
                 {STAGES.map((s) => {
@@ -45,17 +50,17 @@ export default function LeadsPage() {
             </Section>
 
             <div className="flex justify-between items-center mb-3">
-              <h2 className="font-extrabold">רשימת לקוחות ({data.length})</h2>
+              <h2 className="font-extrabold">{drill.filter && drill.filter !== "all" ? `מסונן: ${drill.filter} (${shown.length})` : `רשימת לקוחות (${data.length})`}</h2>
               <button className="btn" onClick={() => setEdit({ funnel_stage: "אותר", personal_letter_sent: false, first_order: false })}>
                 <Icon name="plus" size={17} /> לקוח
               </button>
             </div>
 
-            {data.length === 0 ? (
-              <EmptyState icon="target" title="אין לקוחות פוטנציאליים עדיין" hint="הוסיפו בית ספר, ישיבה, עסק או מוסד" />
+            {shown.length === 0 ? (
+              <EmptyState icon="target" title="אין לקוחות בתצוגה זו" hint="הוסיפו בית ספר, ישיבה, עסק או מוסד" />
             ) : (
               <div className="grid gap-2.5">
-                {data.map((l) => (
+                {shown.map((l) => (
                   <div key={l.id} className="card p-4 flex items-center gap-3 cursor-pointer" onClick={() => setEdit(l)}>
                     <div className="min-w-0 flex-1">
                       <div className="font-bold">{l.business_name}</div>

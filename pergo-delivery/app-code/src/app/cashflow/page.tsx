@@ -5,10 +5,11 @@ import { useData } from "@/hooks/useData";
 import { repo, insert } from "@/lib/repo";
 import type { CashFlowSnapshot } from "@/lib/domain/types";
 import { cashStatus } from "@/lib/domain/calc";
-import { DataState, StatCard, Section } from "@/components/ui";
+import { DataState, StatCard, Section, DrillBanner } from "@/components/ui";
 import { Modal, Field } from "@/components/Modal";
 import { Icon } from "@/components/Icon";
 import { money, todayISO } from "@/lib/format";
+import { useDrill } from "@/hooks/useDrill";
 
 export default function CashflowPage() {
   const { data, loading, error, configured, reload } = useData(async () => {
@@ -16,6 +17,7 @@ export default function CashflowPage() {
     return { entries, settings, cashFlow };
   });
   const [edit, setEdit] = useState(false);
+  const drill = useDrill();
 
   return (
     <DataState configured={configured} loading={loading} error={error}>
@@ -24,6 +26,7 @@ export default function CashflowPage() {
         const c = cashStatus(data.entries, snap, data.settings);
         return (
           <>
+            <DrillBanner label={drill.label} />
             {c.depositWarn && <Alert level="warn" text={`יש ${money(c.cashToDeposit)} מזומן שטרם הופקד לבנק — מומלץ להפקיד.`} />}
             {c.diffAlert && <Alert level="bad" text="קיים הפרש בין סה״כ אמצעי התשלום למחזור — דורש בדיקה." />}
 

@@ -41,6 +41,9 @@ function DashboardBody({ entries, settings, calendar, tasks, cashFlow }: {
 
   const paceLevel = m.pacePct >= 1 ? "good" : m.pacePct >= 0.85 ? "warn" : "bad";
   const aoLevel = m.avgOrder >= settings.avg_order_target ? "good" : m.avgOrder >= settings.avg_order_target * 0.8 ? "warn" : "bad";
+  // drill-down URL builder: every metric links to its source screen with a filter
+  const dl = (path: string, filter: string | null, label: string) =>
+    `${path}?${filter ? `filter=${filter}&` : ""}label=${encodeURIComponent(label)}`;
 
   return (
     <>
@@ -50,17 +53,29 @@ function DashboardBody({ entries, settings, calendar, tasks, cashFlow }: {
           {lights.map((l, i) => {
             const c = l.level === "good" ? "var(--good)" : l.level === "warn" ? "var(--warn)" : "var(--bad)";
             const bg = l.level === "good" ? "var(--good-bg)" : l.level === "warn" ? "var(--warn-bg)" : "var(--bad-bg)";
-            return (
-              <div key={i} className="card p-3.5 flex items-center gap-3" style={{ borderInlineStartWidth: 4, borderInlineStartColor: c }}>
+            const href =
+              l.icon === "banknote" ? dl("/cashflow", "deposit", "מזומן שצריך להפקיד") :
+              l.icon === "alert-triangle" ? dl("/journal", "diff", "ימים עם הפרש מול אמצעי תשלום") :
+              l.icon === "calendar" ? dl("/calendar", null, "אירוע עסקי קרוב") :
+              l.icon === "circle-alert" ? dl("/tasks", "תקוע", "משימות תקועות") :
+              l.icon.startsWith("trending") ? dl("/journal", "month", "מחזור החודש") : null;
+            const inner = (
+              <>
                 <div className="grid place-items-center w-9 h-9 rounded-lg shrink-0" style={{ background: bg, color: c }}>
                   <Icon name={l.icon} size={18} />
                 </div>
-                <div className="min-w-0">
+                <div className="min-w-0 flex-1">
                   <div className="font-bold text-sm truncate">{l.title}</div>
                   <div className="text-xs truncate" style={{ color: "var(--text-dim)" }}>{l.detail}</div>
                 </div>
-              </div>
+                {href && <span className="font-extrabold" style={{ color: c }}>›</span>}
+              </>
             );
+            const cls = "card p-3.5 flex items-center gap-3";
+            const st = { borderInlineStartWidth: 4, borderInlineStartColor: c } as const;
+            return href
+              ? <Link key={i} href={href} className={cls} style={st}>{inner}</Link>
+              : <div key={i} className={cls} style={st}>{inner}</div>;
           })}
         </div>
       </Section>
@@ -68,16 +83,17 @@ function DashboardBody({ entries, settings, calendar, tasks, cashFlow }: {
       {/* Gauges */}
       <Section title="שעוני מחוונים">
         <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(280px,1fr))" }}>
-          <div className="card p-5">
+          <Link href={dl("/journal", "month", "מחזור החודש")} className="card p-5 block" style={{ cursor: "pointer" }}>
             <Gauge value={m.cumulative} max={m.target} label={`מחזור ${m.monthLabel}`} display={money(m.cumulative)} />
             <div className="grid grid-cols-3 gap-2 mt-3 text-center">
               <Meta k="יעד חודשי" v={money(m.target)} />
               <Meta k="נותר ליעד" v={money(m.remaining)} level={m.remaining ? "warn" : "good"} />
               <Meta k="% מהיעד" v={`${Math.round(m.pctOfTarget * 100)}%`} level={paceLevel} />
             </div>
-          </div>
+            <div className="text-[11px] font-bold mt-2 text-center" style={{ color: "var(--brand)" }}>לחץ לפירוט ›</div>
+          </Link>
 
-          <div className="card p-5">
+          <Link href={dl("/journal", "month", "קצב חודשי משוער")} className="card p-5 block" style={{ cursor: "pointer" }}>
             <Gauge value={m.pace} max={m.target * 1.2} label="קצב חודשי משוער"
               display={money(m.pace)}
               zones={[{ to: 0.5 / 1.2, color: "#dc2626" }, { to: 0.83 / 1.2, color: "#d97706" }, { to: 1, color: "#16a34a" }]} />
@@ -86,9 +102,10 @@ function DashboardBody({ entries, settings, calendar, tasks, cashFlow }: {
               <Meta k="ימים עם נתונים" v={`${m.daysWithData}/${m.daysInMonth}`} />
               <Meta k="למכור ליום" v={money(m.neededPerDay)} level="warn" />
             </div>
-          </div>
+            <div className="text-[11px] font-bold mt-2 text-center" style={{ color: "var(--brand)" }}>לחץ לפירוט ›</div>
+          </Link>
 
-          <div className="card p-5">
+          <Link href={dl("/journal", "month", "ממוצע הזמנה")} className="card p-5 block" style={{ cursor: "pointer" }}>
             <Gauge value={m.avgOrder} max={settings.avg_order_target * 2} label="ממוצע הזמנה"
               display={money(m.avgOrder)} />
             <div className="grid grid-cols-3 gap-2 mt-3 text-center">
@@ -96,21 +113,22 @@ function DashboardBody({ entries, settings, calendar, tasks, cashFlow }: {
               <Meta k="עסקאות" v={nf(m.transactions)} />
               <Meta k="מצב" v={m.avgOrder >= settings.avg_order_target ? "מעל" : "מתחת"} level={aoLevel} />
             </div>
-          </div>
+            <div className="text-[11px] font-bold mt-2 text-center" style={{ color: "var(--brand)" }}>לחץ לפירוט ›</div>
+          </Link>
         </div>
       </Section>
 
       {/* KPI row */}
       <Section title="תמונת מצב">
         <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))" }}>
-          <StatCard label="מחזור היום" value={money(m.todayRevenue)} icon="banknote" />
-          <StatCard label="משלוחים" value={nf(m.deliveries)} icon="send" />
-          <StatCard label="איסוף עצמי" value={nf(m.pickup)} icon="clock" />
-          <StatCard label="ישיבה במקום" value={nf(m.dineIn)} icon="utensils" />
-          <StatCard label="יתרת בנק" value={money(cash.bankBalance)} icon="banknote" />
-          <StatCard label="מזומן בקופה" value={money(cash.cashInRegister)} icon="banknote" />
-          <StatCard label="מזומן להפקדה" value={money(cash.cashToDeposit)} level={cash.depositWarn ? "warn" : "good"} icon="arrow-up" />
-          <StatCard label="הפרש אמצעי תשלום" value={money(cash.revenueDiff)} level={cash.diffAlert ? "bad" : "good"} icon="alert-triangle" />
+          <StatCard label="מחזור היום" value={money(m.todayRevenue)} icon="banknote" href={dl("/journal", "today", "מחזור היום")} />
+          <StatCard label="משלוחים" value={nf(m.deliveries)} icon="send" href={dl("/journal", "month", "משלוחים החודש")} />
+          <StatCard label="איסוף עצמי" value={nf(m.pickup)} icon="clock" href={dl("/journal", "month", "איסוף עצמי")} />
+          <StatCard label="ישיבה במקום" value={nf(m.dineIn)} icon="utensils" href={dl("/journal", "month", "ישיבה במקום")} />
+          <StatCard label="יתרת בנק" value={money(cash.bankBalance)} icon="banknote" href={dl("/cashflow", null, "יתרת בנק")} />
+          <StatCard label="מזומן בקופה" value={money(cash.cashInRegister)} icon="banknote" href={dl("/cashflow", null, "מזומן בקופה")} />
+          <StatCard label="מזומן להפקדה" value={money(cash.cashToDeposit)} level={cash.depositWarn ? "warn" : "good"} icon="arrow-up" href={dl("/cashflow", "deposit", "מזומן שצריך להפקיד")} />
+          <StatCard label="הפרש אמצעי תשלום" value={money(cash.revenueDiff)} level={cash.diffAlert ? "bad" : "good"} icon="alert-triangle" href={dl("/journal", "diff", "הפרש מול אמצעי תשלום")} />
         </div>
       </Section>
 
@@ -119,7 +137,7 @@ function DashboardBody({ entries, settings, calendar, tasks, cashFlow }: {
         <div className="card p-5">
           <div className="flex items-center justify-between mb-2">
             <h2 className="font-extrabold">אירוע עסקי קרוב</h2>
-            <Link href="/calendar" className="text-sm" style={{ color: "var(--brand)" }}>לוח שנה ←</Link>
+            <Link href={dl("/calendar", null, "אירוע עסקי קרוב")} className="text-sm" style={{ color: "var(--brand)" }}>לוח שנה ←</Link>
           </div>
           {ev ? (
             <>
@@ -146,12 +164,12 @@ function DashboardBody({ entries, settings, calendar, tasks, cashFlow }: {
         <div className="card p-5">
           <div className="flex items-center justify-between mb-2">
             <h2 className="font-extrabold">משימות</h2>
-            <Link href="/tasks" className="text-sm" style={{ color: "var(--brand)" }}>כל המשימות ←</Link>
+            <Link href={dl("/tasks", "open", "משימות פתוחות")} className="text-sm" style={{ color: "var(--brand)" }}>כל המשימות ←</Link>
           </div>
           <div className="grid grid-cols-3 gap-2 text-center mb-3">
-            <Meta k="בתהליך" v={nf(ts.inProgress)} level="warn" />
-            <Meta k="תקועות" v={nf(ts.stuck)} level={ts.stuck ? "bad" : "good"} />
-            <Meta k="פתוחות" v={nf(ts.open)} />
+            <Link href={dl("/tasks", "בתהליך", "משימות בתהליך")} className="block"><Meta k="בתהליך" v={nf(ts.inProgress)} level="warn" /></Link>
+            <Link href={dl("/tasks", "תקוע", "משימות תקועות")} className="block"><Meta k="תקועות" v={nf(ts.stuck)} level={ts.stuck ? "bad" : "good"} /></Link>
+            <Link href={dl("/tasks", "open", "משימות פתוחות")} className="block"><Meta k="פתוחות" v={nf(ts.open)} /></Link>
           </div>
           {ts.nearest ? (
             <div className="p-3 rounded-lg text-sm" style={{ background: "var(--surface-2)" }}>

@@ -347,15 +347,16 @@ function taskSum(){ const open=S.tasks.filter(t=>t.status!=='בוצע');
     nearest:open.find(t=>t.status==='בתהליך')||open[0]||null}; }
 function lights(){
   const m=metrics(),c=cashStat(),ts=taskSum(),ev=nextEvent();const L=[];
-  if(m.pacePct>=1)L.push(['good','trend','מחזור בקצב היעד',`צפי ${Math.round(m.pacePct*100)}% מהיעד`]);
-  else if(m.pacePct>=.85)L.push(['warn','trend','מחזור מתחת לקצב',`צפי ${Math.round(m.pacePct*100)}% מהיעד`]);
-  else L.push(['bad','trend','מחזור נמוך',`צפי ${Math.round(m.pacePct*100)}% מהיעד — דרוש דחיפה`]);
-  if(c.depWarn)L.push(['warn','cash','מזומן לא הופקד',`${nf(c.toDep)} ₪ ממתינים להפקדה`]);
-  if(c.diffAlert)L.push(['bad','alert','אי־התאמת אמצעי תשלום','סה״כ אמצעי תשלום שונה מהמחזור']);
-  if(ev&&ev.active)L.push(['warn','calendar','אירוע פעיל',`${ev.event} — בתקופה כעת`]);
-  else if(ev&&ev.days<=7)L.push(['warn','calendar','היערכות לאירוע',`${ev.event} בעוד ${ev.days} ימים`]);
-  if(ts.stuck)L.push(['bad','alert','משימות תקועות',`${ts.stuck} משימות דורשות טיפול`]);
-  if(L.every(l=>l[0]==='good'))L.push(['good','check','הכל תקין','אין התראות פתוחות']);
+  const RM=['journal','month','מחזור החודש'];
+  if(m.pacePct>=1)L.push(['good','trend','מחזור בקצב היעד',`צפי ${Math.round(m.pacePct*100)}% מהיעד`,RM]);
+  else if(m.pacePct>=.85)L.push(['warn','trend','מחזור מתחת לקצב',`צפי ${Math.round(m.pacePct*100)}% מהיעד`,RM]);
+  else L.push(['bad','trend','מחזור נמוך',`צפי ${Math.round(m.pacePct*100)}% מהיעד — דרוש דחיפה`,RM]);
+  if(c.depWarn)L.push(['warn','cash','מזומן לא הופקד',`${nf(c.toDep)} ₪ ממתינים להפקדה`,['cashflow','deposit','מזומן שצריך להפקיד']]);
+  if(c.diffAlert)L.push(['bad','alert','אי־התאמת אמצעי תשלום','סה״כ אמצעי תשלום שונה מהמחזור',['journal','diff','ימים עם הפרש מול אמצעי תשלום']]);
+  if(ev&&ev.active)L.push(['warn','calendar','אירוע פעיל',`${ev.event} — בתקופה כעת`,['calendar','event','אירוע עסקי קרוב']]);
+  else if(ev&&ev.days<=7)L.push(['warn','calendar','היערכות לאירוע',`${ev.event} בעוד ${ev.days} ימים`,['calendar','event','אירוע עסקי קרוב']]);
+  if(ts.stuck)L.push(['bad','alert','משימות תקועות',`${ts.stuck} משימות דורשות טיפול`,['tasks','תקוע','משימות תקועות']]);
+  if(L.every(l=>l[0]==='good'))L.push(['good','check','הכל תקין','אין התראות פתוחות',null]);
   return L;
 }
 
@@ -395,34 +396,48 @@ function screenDash(){
   const paceLvl=m.pacePct>=1?'good':m.pacePct>=.85?'warn':'bad';
   const aoLvl=m.avgOrder>=S.settings.avg_order_target?'good':m.avgOrder>=S.settings.avg_order_target*.8?'warn':'bad';
   const meta=(k,v,lvl)=>`<div class="m"><small>${k}</small><b class="tnum" style="color:${lvl?`var(--${lvl})`:'var(--ink)'}">${v}</b></div>`;
+  const hint=`<div style="font-size:.66rem;color:var(--accent);font-weight:700;margin-top:8px">לחץ לפירוט ›</div>`;
+  const idx=s=>STAGES.indexOf(s);
+  const firstOrders=S.leads.filter(l=>idx(l.stage)>=idx('הזמנה ראשונה')).length;
+  const regulars=S.leads.filter(l=>l.stage==='לקוח קבוע').length;
+  const ws=weekStats(weekDates(0));
+  const D=(tab,f,label)=>`onclick="drill('${tab}','${f}','${label}')"`;
   return `
-  <div class="sec"><div class="grid lights">${L.map(l=>`<div class="light lv-${l[0]}"><div class="ic">${svg(l[1])}</div>
-    <div><b>${l[2]}</b><small>${l[3]}</small></div></div>`).join('')}</div></div>
+  <div class="sec"><div class="grid lights">${L.map(l=>`<div class="light lv-${l[0]}" ${l[4]?`style="cursor:pointer" ${D(l[4][0],l[4][1],l[4][2])}`:''}><div class="ic">${svg(l[1])}</div>
+    <div style="flex:1;min-width:0"><b>${l[2]}</b><small>${l[3]}</small></div>${l[4]?`<span style="color:var(--accent);font-weight:800;font-size:1.1rem">›</span>`:''}</div>`).join('')}</div></div>
 
-  <div class="sec"><h2>שעוני מחוונים</h2><div class="grid gauges">
-    <div class="card gcard"><h3>מחזור ${m.monthLabel}</h3>${gauge(m.cum,m.target)}
+  <div class="sec"><h2>שעוני מחוונים · לחץ לפירוט</h2><div class="grid gauges">
+    <div class="card gcard" style="cursor:pointer" ${D('journal','month','מחזור החודש')}><h3>מחזור ${m.monthLabel}</h3>${gauge(m.cum,m.target)}
       <div class="gbig tnum">${money(m.cum)}</div>
-      <div class="gmeta">${meta('יעד',money(m.target))}${meta('נותר',money(m.rem),m.rem?'warn':'good')}${meta('% מהיעד',Math.round(m.pct*100)+'%',paceLvl)}</div></div>
-    <div class="card gcard"><h3>קצב חודשי משוער</h3>${gauge(m.pace,m.target*1.2,[[.5/1.2,'var(--bad)'],[.83/1.2,'var(--warn)'],[1,'var(--good)']])}
+      <div class="gmeta">${meta('יעד',money(m.target))}${meta('נותר',money(m.rem),m.rem?'warn':'good')}${meta('% מהיעד',Math.round(m.pct*100)+'%',paceLvl)}</div>${hint}</div>
+    <div class="card gcard" style="cursor:pointer" ${D('journal','month','קצב חודשי משוער')}><h3>קצב חודשי משוער</h3>${gauge(m.pace,m.target*1.2,[[.5/1.2,'var(--bad)'],[.83/1.2,'var(--warn)'],[1,'var(--good)']])}
       <div class="gbig tnum">${money(m.pace)}</div>
-      <div class="gmeta">${meta('ממוצע יומי',money(m.avgDaily))}${meta('ימים',m.n+'/'+m.dim)}${meta('למכור ליום',money(m.needed),'warn')}</div></div>
-    <div class="card gcard"><h3>ממוצע הזמנה</h3>${gauge(m.avgOrder,S.settings.avg_order_target*2)}
+      <div class="gmeta">${meta('ממוצע יומי',money(m.avgDaily))}${meta('ימים',m.n+'/'+m.dim)}${meta('למכור ליום',money(m.needed),'warn')}</div>${hint}</div>
+    <div class="card gcard" style="cursor:pointer" ${D('journal','month','ממוצע הזמנה')}><h3>ממוצע הזמנה</h3>${gauge(m.avgOrder,S.settings.avg_order_target*2)}
       <div class="gbig tnum">${money(m.avgOrder)}</div>
-      <div class="gmeta">${meta('יעד',money(S.settings.avg_order_target))}${meta('עסקאות',nf(m.tx))}${meta('מצב',m.avgOrder>=S.settings.avg_order_target?'מעל':'מתחת',aoLvl)}</div></div>
+      <div class="gmeta">${meta('יעד',money(S.settings.avg_order_target))}${meta('עסקאות',nf(m.tx))}${meta('מצב',m.avgOrder>=S.settings.avg_order_target?'מעל':'מתחת',aoLvl)}</div>${hint}</div>
   </div></div>
 
   <div class="sec"><h2>תמונת מצב</h2><div class="grid kpis">
-    ${kpi('מחזור היום',money(m.todayRev),'cash')}${kpi('משלוחים',nf(m.deliveries),'send')}
-    ${kpi('איסוף עצמי',nf(m.pickup),'clock')}${kpi('ישיבה במקום',nf(m.dineIn),'utensils')}
-    ${kpi('יתרת בנק',money(c.bank),'cash')}${kpi('מזומן בקופה',money(c.reg),'cash')}
-    ${kpi('מזומן להפקדה',money(c.toDep),'up',c.depWarn?'warn':'good')}
-    ${kpi('הפרש אמצעי תשלום',money(c.diff),'alert',c.diffAlert?'bad':'good')}
+    ${kpi('מחזור היום',money(m.todayRev),'cash',null,['journal','today','מחזור היום'])}${kpi('משלוחים',nf(m.deliveries),'send',null,['journal','month','משלוחים החודש'])}
+    ${kpi('איסוף עצמי',nf(m.pickup),'clock',null,['journal','month','איסוף עצמי'])}${kpi('ישיבה במקום',nf(m.dineIn),'utensils',null,['journal','month','ישיבה במקום'])}
+    ${kpi('יתרת בנק',money(c.bank),'cash',null,['cashflow','balances','יתרת בנק'])}${kpi('מזומן בקופה',money(c.reg),'cash',null,['cashflow','balances','מזומן בקופה'])}
+    ${kpi('מזומן להפקדה',money(c.toDep),'up',c.depWarn?'warn':'good',['cashflow','deposit','מזומן שצריך להפקיד'])}
+    ${kpi('הפרש אמצעי תשלום',money(c.diff),'alert',c.diffAlert?'bad':'good',['journal','diff','הפרש מול אמצעי תשלום'])}
+  </div></div>
+
+  <div class="sec"><h2>מבט מהיר</h2><div class="grid kpis">
+    ${kpi('לקוחות פוטנציאליים',nf(S.leads.length),'target',null,['leads','all','לקוחות פוטנציאליים'])}
+    ${kpi('הזמנות ראשונות',nf(firstOrders),'target',null,['leads','הזמנה ראשונה','הזמנות ראשונות'])}
+    ${kpi('לקוחות קבועים',nf(regulars),'check',null,['leads','לקוח קבוע','לקוחות קבועים'])}
+    ${kpi('עלות שכר שבועית',money(ws.cost),'cash','warn',['employees','week','עלות שכר שבועית'])}
+    ${kpi('חוסרי עובדים השבוע',nf(ws.missing),'users',ws.missing?'bad':'good',['employees','week','חוסרי עובדים בשבוע'])}
   </div></div>
 
   <div class="two">
-    <div class="card pad"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+    <div class="card pad" style="cursor:pointer" ${D('calendar','event','אירוע עסקי קרוב')}><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
       <h2 style="font-size:1.02rem;font-weight:800">אירוע עסקי קרוב</h2>
-      <button class="chip acc" onclick="go('calendar')" style="cursor:pointer">לוח שנה ←</button></div>
+      <span style="color:var(--accent);font-weight:700;font-size:.8rem">לוח שנה ›</span></div>
       ${ev?`<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
         <span style="font-size:1.3rem;font-weight:800">${ev.active?'🔴 ':''}${ev.event}</span>
         ${ev.importance?`<span class="chip ${ev.importance==='גבוהה'?'bad':'warn'}">חשיבות ${ev.importance}</span>`:''}</div>
@@ -434,12 +449,12 @@ function screenDash(){
     </div>
     <div class="card pad"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
       <h2 style="font-size:1.02rem;font-weight:800">משימות</h2>
-      <button class="chip acc" onclick="go('tasks')" style="cursor:pointer">הכל ←</button></div>
+      <span style="color:var(--accent);font-weight:700;font-size:.8rem">לחץ מדד לפירוט ›</span></div>
       <div class="comp" style="margin-top:0">
-        <div class="c"><small>בתהליך</small><b class="tnum" style="color:var(--warn)">${ts.inProg}</b></div>
-        <div class="c"><small>תקועות</small><b class="tnum" style="color:${ts.stuck?'var(--bad)':'var(--good)'}">${ts.stuck}</b></div>
-        <div class="c"><small>פתוחות</small><b class="tnum">${ts.open}</b></div>
-        <div class="c"><small>בוצעו</small><b class="tnum" style="color:var(--good)">${ts.done}</b></div></div>
+        <div class="c" style="cursor:pointer" ${D('tasks','בתהליך','משימות בתהליך')}><small>בתהליך</small><b class="tnum" style="color:var(--warn)">${ts.inProg}</b></div>
+        <div class="c" style="cursor:pointer" ${D('tasks','תקוע','משימות תקועות')}><small>תקועות</small><b class="tnum" style="color:${ts.stuck?'var(--bad)':'var(--good)'}">${ts.stuck}</b></div>
+        <div class="c" style="cursor:pointer" ${D('tasks','open','משימות פתוחות')}><small>פתוחות</small><b class="tnum">${ts.open}</b></div>
+        <div class="c" style="cursor:pointer" ${D('tasks','בוצע','משימות שבוצעו')}><small>בוצעו</small><b class="tnum" style="color:var(--good)">${ts.done}</b></div></div>
       ${ts.nearest?`<div style="background:var(--surface-2);border-radius:11px;padding:11px 13px;margin-top:11px">
         <div style="font-size:.68rem;color:var(--mute)">המשימה הקרובה</div><b>${ts.nearest.title}</b>
         <div style="font-size:.76rem;color:var(--dim);margin-top:2px">${[ts.nearest.owner,ts.nearest.category,ts.nearest.status].filter(Boolean).join(' · ')}</div></div>`:''}
@@ -447,12 +462,18 @@ function screenDash(){
   </div>
   <div class="foot">מערכת ניהול פרגו · הנתונים נשמרים בדפדפן הזה · <button class="chip" style="cursor:pointer" onclick="resetAll()">איפוס לברירת מחדל</button></div>`;
 }
-const kpi=(k,v,ic,lvl)=>`<div class="card kpi"><small>${k} ${svg(ic)}</small><b class="tnum" style="color:${lvl?`var(--${lvl})`:'var(--ink)'}">${v}</b></div>`;
+const kpi=(k,v,ic,lvl,d)=>`<div class="card kpi" ${d?`style="cursor:pointer" onclick="drill('${d[0]}','${d[1]}','${String(d[2]).replace(/'/g,'')}')"`:''}><small>${k} ${svg(ic)}</small><b class="tnum" style="color:${lvl?`var(--${lvl})`:'var(--ink)'}">${v}</b>${d?`<div style="font-size:.64rem;color:var(--accent);margin-top:3px;font-weight:700">לפירוט ›</div>`:''}</div>`;
 
 function screenJournal(){
-  const rows=[...S.journal].sort((a,b)=>a.date<b.date?1:-1);
+  let rows=[...S.journal].sort((a,b)=>a.date<b.date?1:-1);
+  const f=(DRILL&&DRILL.tab==='journal')?DRILL.filter:null,t=todayISO();
+  if(f==='today')rows=rows.filter(e=>e.date===t);
+  else if(f==='month'){const d=new Date(t);rows=rows.filter(e=>{const x=new Date(e.date);return x.getMonth()===d.getMonth()&&x.getFullYear()===d.getFullYear();});}
+  else if(f==='diff')rows=rows.filter(e=>Math.abs(payTotals(e).diff)>0.5);
+  else if(f==='deposit')rows=rows.filter(e=>payTotals(e).toDep>0);
+  const fLabel={today:'היום בלבד',month:'החודש הנוכחי',diff:'ימים עם הפרש תשלום',deposit:'ימים עם מזומן להפקדה'}[f];
   return `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:10px;flex-wrap:wrap">
-    <div style="font-size:.86rem;color:var(--dim)">${S.journal.length} ימים הוזנו · ימים ריקים לא נספרים בגרפים</div>
+    <div style="font-size:.86rem;color:var(--dim)">${fLabel?`מסונן: <b>${fLabel}</b> · ${rows.length} רשומות`:`${S.journal.length} ימים הוזנו · ימים ריקים לא נספרים בגרפים`}</div>
     <button class="btn" onclick="openEntry()">${svg('plus')} הזנת יום</button></div>
     ${rows.length?`<div class="card tscroll"><table><thead><tr>
       <th>תאריך</th><th>יום</th><th>אירוע</th><th>מחזור</th><th>עסקאות</th><th>ממוצע</th><th>סה״כ תשלום</th><th>הפרש</th><th>להפקדה</th></tr></thead>
@@ -481,8 +502,15 @@ function screenCalendar(){
 
 function screenTasks(){
   const lvl=s=>s==='בוצע'?'good':s==='תקוע'?'bad':s==='בתהליך'?'warn':'';
-  return `<div style="display:flex;justify-content:flex-end;margin-bottom:14px"><button class="btn" onclick="openTask()">${svg('plus')} משימה</button></div>
-    <div class="grid" style="gap:10px">${S.tasks.map(t=>`<div class="card pad" style="display:flex;align-items:center;gap:12px">
+  const f=(DRILL&&DRILL.tab==='tasks')?DRILL.filter:null;
+  let list=S.tasks;
+  if(f==='open')list=S.tasks.filter(t=>t.status!=='בוצע');
+  else if(f)list=S.tasks.filter(t=>t.status===f);
+  return `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:10px;flex-wrap:wrap">
+    <div style="font-size:.86rem;color:var(--dim)">${f?`מסונן: <b>${f==='open'?'פתוחות':f}</b> · ${list.length} משימות`:`${S.tasks.length} משימות`}</div>
+    <button class="btn" onclick="openTask()">${svg('plus')} משימה</button></div>
+    ${list.length===0?`<div class="card empty"><b>אין משימות בתצוגה זו</b></div>`:''}
+    <div class="grid" style="gap:10px">${list.map(t=>`<div class="card pad" style="display:flex;align-items:center;gap:12px">
       <button onclick="toggleTask('${t.id}')" style="width:24px;height:24px;border-radius:7px;border:2px solid var(--border);cursor:pointer;flex:0 0 auto;
         background:${t.status==='בוצע'?'var(--good)':'transparent'};color:#fff;display:grid;place-items:center">${t.status==='בוצע'?svg('check'):''}</button>
       <div style="flex:1;min-width:0;cursor:pointer" onclick="openTask('${t.id}')">
@@ -550,17 +578,21 @@ const STAGES=['אותר','טעימה נשלחה','שיחת מעקב','הזמנה
 const LTARGET={'אותר':100,'טעימה נשלחה':100,'שיחת מעקב':50,'הזמנה ראשונה':20,'לקוח קבוע':10};
 function screenLeads(){
   const idx=s=>STAGES.indexOf(s),reached=st=>S.leads.filter(l=>idx(l.stage)>=idx(st)).length;
+  const f=(DRILL&&DRILL.tab==='leads')?DRILL.filter:null;
+  let list=S.leads;
+  if(f==='הזמנה ראשונה')list=S.leads.filter(l=>idx(l.stage)>=idx('הזמנה ראשונה'));
+  else if(f==='לקוח קבוע')list=S.leads.filter(l=>l.stage==='לקוח קבוע');
   return `<div class="sec"><h2>משפך לקוחות עסקיים (יעד רבעוני)</h2>
     <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(138px,1fr))">${STAGES.map(s=>{
       const v=s==='אותר'?S.leads.length:reached(s),t=LTARGET[s],pct=Math.min(100,Math.round(v/t*100));
       return `<div class="card kpi"><small>${s}</small><b class="tnum">${v}<span style="font-size:.8rem;color:var(--mute);font-weight:400"> / ${t}</span></b>
         <div style="height:5px;border-radius:5px;background:var(--surface-2);margin-top:8px;overflow:hidden"><div style="height:100%;width:${pct}%;background:var(--accent)"></div></div></div>`;}).join('')}</div></div>
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><h2 style="font-size:1rem;font-weight:800">רשימת לקוחות (${S.leads.length})</h2>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><h2 style="font-size:1rem;font-weight:800">${f&&f!=='all'?`מסונן: ${f} (${list.length})`:`רשימת לקוחות (${S.leads.length})`}</h2>
       <button class="btn" onclick="openLead()">${svg('plus')} לקוח</button></div>
-    ${S.leads.length?`<div class="grid" style="gap:10px">${S.leads.map(l=>`<div class="card pad" style="display:flex;align-items:center;gap:12px;cursor:pointer" onclick="openLead('${l.id}')">
+    ${list.length?`<div class="grid" style="gap:10px">${list.map(l=>`<div class="card pad" style="display:flex;align-items:center;gap:12px;cursor:pointer" onclick="openLead('${l.id}')">
       <div style="flex:1;min-width:0"><b>${l.name}</b><div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:5px">
         <span class="chip acc">${l.stage}</span>${l.category?`<span class="chip">${l.category}</span>`:''}${l.contact?`<span class="chip">${l.contact}</span>`:''}${l.letter?`<span class="chip good">מכתב נשלח</span>`:''}</div></div>
-      ${svg('pencil','ico16')}</div>`).join('')}</div>`:`<div class="card empty"><b>אין לקוחות עדיין</b>הוסיפו בית ספר, ישיבה, עסק או מוסד</div>`}`;
+      ${svg('pencil','ico16')}</div>`).join('')}</div>`:`<div class="card empty"><b>אין לקוחות בתצוגה זו</b></div>`}`;
 }
 
 /* ---------- לוח משמרות שבועי ---------- */
@@ -1019,8 +1051,16 @@ function saveShift(){const g=id=>document.getElementById(id).value;if(!g('ns_dat
 function delShift(id){S.shifts=S.shifts.filter(x=>x.id!==id);S.shiftApps=S.shiftApps.filter(a=>a.shiftId!==id);save();closeModal();render();toast('המשמרת נמחקה');}
 
 /* ---------- render ---------- */
-function go(t){TAB=t;render();window.scrollTo(0,0);}
-window.go=go;
+let DRILL=null;
+function go(t){DRILL=null;TAB=t;render();window.scrollTo(0,0);}
+function drill(tab,filter,label){DRILL={tab,filter,label};TAB=tab;render();window.scrollTo(0,0);}
+function drillBannerHTML(){
+  if(!DRILL||DRILL.tab!==TAB)return '';
+  return `<div class="banner" style="background:var(--accent-soft);color:var(--accent-ink);margin-bottom:14px;justify-content:space-between;flex-wrap:wrap;gap:8px">
+    <span style="display:flex;align-items:center;gap:8px">${svg('search')} פירוט הנתון: <b>${DRILL.label}</b></span>
+    <button class="btn ghost sm" onclick="go('dash')">← חזרה לדשבורד</button></div>`;
+}
+window.go=go;window.drill=drill;
 function render(){
   const t=todayISO();
   document.getElementById('tGreg').textContent=weekday(t)+' · '+gregD(t);
@@ -1033,7 +1073,7 @@ function render(){
     `<button class="tab ${TAB===id?'on':''}" onclick="go('${id}')">${svg(ic)}${lbl}</button>`).join('');
   const scr={dash:screenDash,journal:screenJournal,cashflow:screenCashflow,calendar:screenCalendar,tasks:screenTasks,
     leads:screenLeads,menu:screenMenu,feas:screenFeas,reports:screenReports,employees:screenEmployees,zreport:screenZreport,docs:screenDocs,settings:screenSettings}[TAB];
-  document.getElementById('main').innerHTML=scr();
+  document.getElementById('main').innerHTML=drillBannerHTML()+scr();
 }
 let toastT;function toast(m){const el=document.getElementById('toast');el.textContent=m;el.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>el.classList.remove('show'),1800);}
 window.openEntry=openEntry;window.saveEntry=saveEntry;window.onDate=onDate;window.liveCalc=liveCalc;

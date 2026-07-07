@@ -4,10 +4,12 @@ import { useState } from "react";
 import { useData } from "@/hooks/useData";
 import { repo, insert, update, remove } from "@/lib/repo";
 import type { Task, TaskStatus } from "@/lib/domain/types";
-import { DataState, EmptyState, Badge } from "@/components/ui";
+import { DataState, EmptyState, Badge, DrillBanner } from "@/components/ui";
 import { Modal, Field } from "@/components/Modal";
 import { Icon } from "@/components/Icon";
 import { gregDate } from "@/lib/format";
+import { useDrill } from "@/hooks/useDrill";
+import { useEffect } from "react";
 
 const STATUSES: TaskStatus[] = ["מתוכנן", "בתהליך", "בוצע", "תקוע"];
 const CATEGORIES = ["שיווק", "תפריט", "תפעול", "כספים", "ספקים", "שירות", "עובדים", "כשרות", "מכירות", "אסטרטגיה"];
@@ -19,11 +21,19 @@ export default function TasksPage() {
   const { data, loading, error, configured, reload } = useData(() => repo.tasks());
   const [edit, setEdit] = useState<Partial<Task> | null>(null);
   const [filter, setFilter] = useState<string>("");
+  const drill = useDrill();
+  useEffect(() => {
+    if (drill.filter === "open") setFilter("open");
+    else if (drill.filter) setFilter(drill.filter);
+  }, [drill.filter]);
 
-  const tasks = (data ?? []).filter((t) => !filter || t.status === filter);
+  const tasks = (data ?? []).filter((t) =>
+    !filter ? true : filter === "open" ? t.status !== "בוצע" : t.status === filter
+  );
 
   return (
     <DataState configured={configured} loading={loading} error={error}>
+      <DrillBanner label={drill.label} />
       <div className="flex justify-between items-center mb-4 gap-2 flex-wrap">
         <div className="flex gap-1.5 flex-wrap">
           <FilterChip active={filter === ""} onClick={() => setFilter("")}>הכל</FilterChip>

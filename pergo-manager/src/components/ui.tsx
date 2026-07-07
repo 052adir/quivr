@@ -1,7 +1,22 @@
 "use client";
 
+import Link from "next/link";
 import { Icon } from "./Icon";
 import type { StatusLevel } from "@/lib/domain/calc";
+
+// Drill-down banner shown at the top of a source screen when navigated from a
+// dashboard metric. Shows "פירוט הנתון: X" + a back-to-dashboard button.
+export function DrillBanner({ label }: { label: string | null }) {
+  if (!label) return null;
+  return (
+    <div className="card p-3 mb-4 flex items-center justify-between gap-3" style={{ background: "#eef0fe", borderColor: "transparent" }}>
+      <span className="text-sm font-semibold flex items-center gap-2" style={{ color: "var(--brand)" }}>
+        <Icon name="search" size={16} /> פירוט הנתון: <b>{label}</b>
+      </span>
+      <Link href="/dashboard" className="btn btn-ghost btn-sm">← חזרה לדשבורד</Link>
+    </div>
+  );
+}
 
 export function Section({ title, action, children }: { title?: string; action?: React.ReactNode; children: React.ReactNode }) {
   return (
@@ -18,19 +33,21 @@ export function Section({ title, action, children }: { title?: string; action?: 
 }
 
 export function StatCard({
-  label, value, sub, level, icon,
-}: { label: string; value: string; sub?: string; level?: StatusLevel; icon?: string }) {
+  label, value, sub, level, icon, href,
+}: { label: string; value: string; sub?: string; level?: StatusLevel; icon?: string; href?: string }) {
   const color = level === "good" ? "var(--good)" : level === "warn" ? "var(--warn)" : level === "bad" ? "var(--bad)" : "var(--text)";
-  return (
-    <div className="card p-4">
+  const body = (
+    <div className="card p-4 h-full" style={href ? { cursor: "pointer" } : undefined}>
       <div className="flex items-center justify-between">
         <div className="text-xs font-semibold" style={{ color: "var(--text-dim)" }}>{label}</div>
         {icon && <Icon name={icon} size={16} className="opacity-40" />}
       </div>
       <div className="text-2xl font-extrabold mt-1" style={{ color }}>{value}</div>
       {sub && <div className="text-xs mt-0.5" style={{ color: "var(--text-mute)" }}>{sub}</div>}
+      {href && <div className="text-[11px] font-bold mt-1" style={{ color: "var(--brand)" }}>לפירוט ›</div>}
     </div>
   );
+  return href ? <Link href={href} className="block">{body}</Link> : body;
 }
 
 export function Badge({ level, children }: { level?: StatusLevel | "brand"; children: React.ReactNode }) {

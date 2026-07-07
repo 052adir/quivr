@@ -152,6 +152,9 @@
     border-radius:10px;padding:9px 11px;outline:none;width:100%}
   input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
   .field{width:100%}
+  .dropzone{display:block;width:100%;box-sizing:border-box;text-align:center;padding:20px 14px;border:2px dashed var(--border);border-radius:14px;background:var(--surface-2);cursor:pointer;transition:border-color .15s,background .15s}
+  .dropzone:hover{border-color:var(--accent)}
+  .dropzone.drag{border-color:var(--accent);background:var(--accent-soft)}
   .lbl{font-size:.74rem;color:var(--dim);font-weight:600;margin-bottom:5px;display:block}
   .fgrid{display:grid;gap:11px;grid-template-columns:repeat(auto-fit,minmax(140px,1fr))}
   .comp{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:14px}
@@ -259,7 +262,7 @@ function defaults(){ return {
     {id:'ld2',name:'בית ספר הראל',category:'בית ספר',contact:'המזכירה',role:null,phone:null,tasting:'סלמון',letter:false,stage:'אותר',notes:null}
   ],
   employees:seedEmployees(),shifts:seedShifts(),shiftApps:seedApps(),
-  evaluations:[],feasDraft:null,analyses:[],empEvents:seedEmpEvents(),decisions:seedDecisions(),viewer:{mode:'manager',empId:null},weekOffset:0,_v:3 }; }
+  evaluations:[],feasDraft:null,analyses:[],uploads:[],empEvents:seedEmpEvents(),decisions:seedDecisions(),viewer:{mode:'manager',empId:null},weekOffset:0,_v:3 }; }
 function seedDecisions(){return [
   {id:'dc1',title:'העלאת מחיר הסלמון ב-4₪',status:'נמדד',date:'2026-05-20',invest:0,expReturn:12000,measured:14400,verdict:'הצלחה',note:'לא הורגש בביקוש — התוספת נטו כולה לרווח.'},
   {id:'dc2',title:'קמפיין ממוקד ליום שני (יום חלש)',status:'בביצוע',date:'2026-06-28',invest:1500,expReturn:8000,measured:null,verdict:null,note:'ממתין למדידה — נבדוק מחזור ימי שני בעוד שבועיים.'},
@@ -1125,36 +1128,39 @@ function renderDocPreview(){const el=document.getElementById('doc-preview');if(!
 function confirmDoc(){({emp:confirmEmp,z:confirmZ,pl:saveAnalysis,purch:saveAnalysis,supp:saveAnalysis,sales:saveAnalysis,bal:saveAnalysis}[DOCTYPE])();}
 const actions=`<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap"><button class="btn" onclick="confirmDoc()">${svg('check')} __L__</button><button class="btn ghost" onclick="docParsed=[];docEmp=[];renderDocPreview()">נקה</button></div>`;
 
-function empPreview(){if(!docEmp.length)return '<div style="color:var(--mute);font-size:.85rem;padding:8px 0">הדביקו רשימה ולחצו "נתח מסמך".</div>';
+function empPreview(){if(!docEmp.length)return '<div style="color:var(--mute);font-size:.85rem;padding:8px 0">העלו קובץ או הדביקו רשימה ולחצו "נתח מסמך".</div>';
   const existing=new Set(S.employees.map(e=>e.name));
-  return `<div style="font-size:.78rem;color:var(--dim);font-weight:700;margin-bottom:8px">תצוגה מקדימה — ${docEmp.length} עובדים זוהו</div>
-    ${tbl(['שם עובד','תפקיד','עלות שעתית','ייכנס ל','סטטוס'],docEmp.map(r=>{const need=(!r.role||r.cost==null);
+  const hasEmp=docEmp.some(r=>r.employer!=null),hasTot=docEmp.some(r=>r.total!=null);
+  const ok=docEmp.filter(r=>r.role&&r.cost!=null).length,conf=Math.round(ok/docEmp.length*100);
+  const head=['שם עובד','תפקיד','עלות שעתית',...(hasEmp?['עלות מעביד']:[]),...(hasTot?['סה״כ']:[]),'ייכנס ל','ביטחון','סטטוס'];
+  return `<div style="font-size:.78rem;color:var(--dim);font-weight:700;margin-bottom:8px">תצוגה מקדימה — ${docEmp.length} עובדים זוהו · רמת ביטחון כוללת ${conf}%</div>
+    ${tbl(head,docEmp.map(r=>{const need=(!r.role||r.cost==null);const c=need?(r.name?60:30):(existing.has(r.name)?95:90);
       const st=need?chip('warn','דורש בדיקה'):existing.has(r.name)?chip('acc','קיים · יעודכן'):chip('good','חדש');
-      return `<tr><td style="font-weight:600">${r.name}</td><td>${r.role||'—'}</td><td class="tnum">${r.cost!=null?money0(r.cost):'—'}</td><td style="color:var(--dim);font-size:.8rem">עובדים</td><td>${st}</td></tr>`;}).join(''))}
+      return `<tr><td style="font-weight:600">${r.name}</td><td>${r.role||'—'}</td><td class="tnum">${r.cost!=null?money0(r.cost):'—'}</td>${hasEmp?`<td class="tnum">${r.employer!=null?money0(r.employer):'—'}</td>`:''}${hasTot?`<td class="tnum">${r.total!=null?money0(r.total):'—'}</td>`:''}<td style="color:var(--dim);font-size:.8rem">עובדים</td><td class="tnum" style="color:${c>=85?'var(--good)':c>=60?'var(--warn)':'var(--bad)'}">${c}%</td><td>${st}</td></tr>`;}).join(''))}
     ${actions.replace('__L__',`אשר קליטה (${docEmp.length})`)}`;}
 function confirmEmp(){if(!docEmp.length)return;let add=0,upd=0;
   docEmp.forEach(r=>{const ex=S.employees.find(e=>e.name===r.name);
-    if(ex){if(r.role)ex.role=r.role;if(r.cost!=null)ex.hourly_cost=r.cost;upd++;}
-    else{S.employees.push({id:'em'+Date.now()+Math.floor(Math.random()*1e4),name:r.name,phone:null,role:r.role||'מלצרית',hourly_cost:r.cost,status:'פעיל',notes:r.role?null:'תפקיד לבדיקה'});add++;}});
-  docEmp=[];save();toast(`נקלטו: ${add} חדשים · ${upd} עודכנו`);go('employees');}
+    if(ex){if(r.role)ex.role=r.role;if(r.cost!=null)ex.hourly_cost=r.cost;if(r.employer!=null)ex.employer_cost=r.employer;if(r.hours!=null)ex.hours=r.hours;upd++;}
+    else{S.employees.push({id:'em'+Date.now()+Math.floor(Math.random()*1e4),name:r.name,phone:null,role:r.role||'מלצרית',hourly_cost:r.cost,employer_cost:r.employer??null,hours:r.hours??null,status:'פעיל',notes:r.role?null:'תפקיד לבדיקה'});add++;}});
+  markUpload('נקלט');docEmp=[];save();toast(`נקלטו: ${add} חדשים · ${upd} עודכנו`);go('employees');}
 
 const Z_FIELDS=[[/מחזור/,'revenue','מחזור יומי'],[/עסקא/,'transactions','מספר עסקאות'],[/מזומן/,'cash_received','מזומן שהתקבל'],[/אשראי|קופה/,'credit_received','אשראי / קופה'],[/תן ?ביס|סיבוס/,'tenbis_sibus','תן ביס / סיבוס'],[/וולט|משלוחה/,'wolt_mishloha','וולט / משלוחה'],[/משלוחים/,'deliveries','משלוחים'],[/איסוף/,'pickup','איסוף עצמי'],[/ישיבה/,'dine_in','ישיבה במקום'],[/אחר/,'other_payment','אחר']];
 function zPreview(){const date=document.getElementById('doc-date')?document.getElementById('doc-date').value:todayISO();
   const ex=S.journal.find(e=>e.date===date);
   docZfields=docParsed.map(r=>{const f=Z_FIELDS.find(z=>z[0].test(r.label));return f?{field:f[1],label:f[2],value:r.nums[0]??null}:null;}).filter(Boolean);
-  const rows=docZfields.map(f=>{const cur=ex?ex[f.field]:null;const st=(cur!=null&&cur!=='')?chip('acc','קיים'):chip('good','חדש');
-    return `<tr><td>${f.label}</td><td style="color:var(--dim);font-size:.8rem">יומן</td><td class="tnum">${cur!=null&&cur!==''?nf(cur):'—'}</td><td class="tnum" style="font-weight:700">${f.value!=null?nf(f.value):'—'}</td><td>${st}</td></tr>`;}).join('');
+  const rows=docZfields.map(f=>{const cur=ex?ex[f.field]:null;const st=(cur!=null&&cur!=='')?chip('acc','קיים'):chip('good','חדש');const c=f.value!=null?95:40;
+    return `<tr><td>${f.label}</td><td style="color:var(--dim);font-size:.8rem">יומן</td><td class="tnum">${cur!=null&&cur!==''?nf(cur):'—'}</td><td class="tnum" style="font-weight:700">${f.value!=null?nf(f.value):'—'}</td><td class="tnum" style="color:${c>=85?'var(--good)':'var(--warn)'}">${c}%</td><td>${st}</td></tr>`;}).join('');
   const opts=ex?`<div style="margin:10px 0"><div class="lbl">היום כבר קיים ביומן — כיצד לקלוט?</div>
     <label style="display:block;font-size:.86rem"><input type="radio" name="zmode" value="fill" checked style="width:auto"> השלם רק שדות ריקים</label>
     <label style="display:block;font-size:.86rem"><input type="radio" name="zmode" value="replace" style="width:auto"> החלף נתונים קיימים</label></div>`:'';
   return `<div style="font-size:.78rem;color:var(--dim);font-weight:700;margin-bottom:8px">תצוגה מקדימה · ${gregD(date)} · ${docZfields.length} שדות</div>
-    ${tbl(['שדה שנמצא','ייכנס ל','ערך קיים','ערך חדש','סטטוס'],rows)}${opts}${actions.replace('__L__','אשר קליטה ליומן')}`;}
+    ${tbl(['שדה שנמצא','ייכנס ל','ערך קיים','ערך חדש','ביטחון','סטטוס'],rows)}${opts}${actions.replace('__L__','אשר קליטה ליומן')}`;}
 function confirmZ(){const date=document.getElementById('doc-date').value;if(!date||!docZfields.length)return;
   const mode=(document.querySelector('input[name="zmode"]:checked')||{}).value||'replace';
   let e=S.journal.find(x=>x.date===date);
   if(!e){e={date,weekday:weekday(date),hebrew:hebrew(date),event:(SEED.calendar.find(c=>c.date===date)||{}).event||null};S.journal.push(e);}
   docZfields.forEach(f=>{if(f.value==null)return;const empty=(e[f.field]==null||e[f.field]==='');if(mode==='fill'&&!empty)return;e[f.field]=f.value;});
-  docParsed=[];save();toast('נקלט ליומן היומי');go('journal');}
+  markUpload('נקלט');docParsed=[];save();toast('נקלט ליומן היומי');go('journal');}
 
 const PL_MAP=[[/מחזור|הכנס/,'revenue','מחזור',0],[/חומרי גלם|גלם/,'food','חומרי גלם',34],[/שכר|עובד|משכורת/,'labor','שכר עובדים',30],[/שכירות|שכ.?ד/,'rent','שכירות',10],[/חשמל|מים|ארנונה|תשתית/,'utilities','חשמל ותשתיות',4],[/הנהלת חשבונות|הנה.?ח|רו.?ח/,'accounting','הנהלת חשבונות',2],[/פרסום|שיווק/,'marketing','פרסום ושיווק',5],[/עמלה|עמלות|סליקה/,'commissions','עמלות אשראי',3],[/משלוח|שליח/,'delivery','משלוחים',6]];
 function plPreview(){let revenue=0;const items=[];
@@ -1217,8 +1223,109 @@ function balPreview(){const groups={},unknown=[];docParsed.forEach(r=>{const amt
     ${unknown.length?`<div class="banner warn" style="margin-top:12px">${svg('alert')}סעיפים לא ברורים לבדיקה: ${unknown.join(', ')}</div>`:''}
     ${actions.replace('__L__','שמור ניתוח')}`;}
 
-function saveAnalysis(){if(!docAnalysis)return;S.analyses.unshift(docAnalysis);docAnalysis=null;docParsed=[];save();toast('הניתוח נשמר');render();}
+function saveAnalysis(){if(!docAnalysis)return;S.analyses.unshift(docAnalysis);markUpload('נקלט');docAnalysis=null;docParsed=[];save();toast('הניתוח נשמר');render();}
 function delAnalysis(id){S.analyses=S.analyses.filter(a=>a.id!==id);save();render();}
+
+/* ---------- העלאת קובץ אמיתי + ניתוח (CSV / XLSX) ---------- */
+let docFileMeta=null,lastUploadId=null;
+function csvRows(text){
+  const nl=text.replace(/\r\n?/g,'\n');const firstLine=(nl.split('\n')[0]||'');
+  const delim=(firstLine.split('\t').length>firstLine.split(',').length)?'\t':(firstLine.split(';').length>firstLine.split(',').length?';':',');
+  const rows=[];let row=[],cell='',q=false;
+  for(let i=0;i<nl.length;i++){const ch=nl[i];
+    if(q){if(ch==='"'){if(nl[i+1]==='"'){cell+='"';i++;}else q=false;}else cell+=ch;}
+    else{if(ch==='"')q=true;else if(ch===delim){row.push(cell);cell='';}
+      else if(ch==='\n'){row.push(cell);rows.push(row);row=[];cell='';}else cell+=ch;}}
+  if(cell!==''||row.length){row.push(cell);rows.push(row);}
+  return rows;}
+function colIndex(ref){const m=/^([A-Z]+)/.exec(ref||'');if(!m)return 0;let n=0;for(const ch of m[1])n=n*26+(ch.charCodeAt(0)-64);return n-1;}
+async function inflateRaw(bytes){const ds=new DecompressionStream('deflate-raw');
+  const stream=new Blob([bytes]).stream().pipeThrough(ds);
+  return new Uint8Array(await new Response(stream).arrayBuffer());}
+async function unzip(ab){const dv=new DataView(ab),u8=new Uint8Array(ab),files={};
+  let eocd=-1;for(let i=u8.length-22;i>=0;i--){if(dv.getUint32(i,true)===0x06054b50){eocd=i;break;}}
+  if(eocd<0)throw new Error('not a zip');
+  const cnt=dv.getUint16(eocd+10,true);let off=dv.getUint32(eocd+16,true);
+  for(let n=0;n<cnt&&off+46<=u8.length;n++){if(dv.getUint32(off,true)!==0x02014b50)break;
+    const method=dv.getUint16(off+10,true),csize=dv.getUint32(off+20,true),
+      fnlen=dv.getUint16(off+28,true),exlen=dv.getUint16(off+30,true),cmlen=dv.getUint16(off+32,true),
+      lho=dv.getUint32(off+42,true);
+    const name=new TextDecoder().decode(u8.subarray(off+46,off+46+fnlen));
+    const lfn=dv.getUint16(lho+26,true),lex=dv.getUint16(lho+28,true),dataStart=lho+30+lfn+lex;
+    files[name]={method,comp:u8.subarray(dataStart,dataStart+csize)};
+    off+=46+fnlen+exlen+cmlen;}
+  return files;}
+async function zipEntry(files,name){const f=files[name];if(!f)return null;return f.method===0?f.comp:await inflateRaw(f.comp);}
+async function xlsxRows(ab){
+  const files=await unzip(ab),dec=new TextDecoder();
+  let shared=[];const ss=await zipEntry(files,'xl/sharedStrings.xml');
+  if(ss){const doc=new DOMParser().parseFromString(dec.decode(ss),'application/xml');
+    shared=[...doc.getElementsByTagName('si')].map(si=>[...si.getElementsByTagName('t')].map(t=>t.textContent).join(''));}
+  let sheet='xl/worksheets/sheet1.xml';
+  if(!files[sheet]){const k=Object.keys(files).find(n=>/^xl\/worksheets\/sheet\d+\.xml$/.test(n));if(k)sheet=k;}
+  const sh=await zipEntry(files,sheet);if(!sh)return [];
+  const doc=new DOMParser().parseFromString(dec.decode(sh),'application/xml'),rows=[];
+  [...doc.getElementsByTagName('row')].forEach(r=>{const cells=[];
+    [...r.getElementsByTagName('c')].forEach(c=>{const col=colIndex(c.getAttribute('r')),t=c.getAttribute('t');
+      let v='';const vEl=c.getElementsByTagName('v')[0],isEl=c.getElementsByTagName('is')[0];
+      if(t==='s'&&vEl)v=shared[+vEl.textContent]||'';else if((t==='inlineStr'||t==='str')&&(isEl||vEl))v=(isEl||vEl).textContent||'';
+      else if(vEl)v=vEl.textContent||'';cells[col]=v;});
+    for(let i=0;i<cells.length;i++)if(cells[i]==null)cells[i]='';rows.push(cells);});
+  return rows;}
+const upEl=id=>document.getElementById(id);
+function setUpStatus(kind,html){const el=upEl('doc-upstatus');if(el)el.innerHTML=`<div class="banner ${kind}" style="margin-top:12px">${svg(kind==='bad'?'alert':kind==='warn'?'alert':'check')}${html}</div>`;}
+function recordUpload(file,rowsN,status){const rec={id:'up'+Date.now()+Math.floor(Math.random()*1e4),type:DOCTYPE,label:DOCS[DOCTYPE].label,
+  file_name:file.name,size:file.size,rows:rowsN,period:(upEl('doc-period')||{}).value||(DOCTYPE==='z'?(upEl('doc-date')||{}).value:'')||null,status,at:todayISO()};
+  (S.uploads=S.uploads||[]).unshift(rec);lastUploadId=rec.id;save();return rec;}
+function markUpload(status){if(!lastUploadId)return;const r=(S.uploads||[]).find(x=>x.id===lastUploadId);if(r){r.status=status;save();}}
+async function onDocFile(input){const f=input.files&&input.files[0];if(f)await handleDocFile(f);input.value='';}
+async function handleDocFile(file){
+  const ext=(file.name.split('.').pop()||'').toLowerCase();
+  setUpStatus('warn',`מעבד את «${file.name}»…`);
+  try{
+    if(ext==='csv'||/csv|text\/plain/.test(file.type)){ingestRows(csvRows(await file.text()),file);}
+    else if(ext==='xlsx'){ingestRows(await xlsxRows(await file.arrayBuffer()),file);}
+    else if(ext==='xls'){recordUpload(file,0,'נשמר · ללא ניתוח');setUpStatus('warn','פורמט <b>xls</b> ישן אינו נתמך לניתוח. שמרו כ-<b>xlsx</b> או <b>CSV</b> ונסו שוב (הקובץ נשמר ברשימה).');}
+    else if(ext==='pdf'){recordUpload(file,0,'נשמר · ללא ניתוח');setUpStatus('warn','<b>PDF נתמך בשלב הבא.</b> הקובץ נשמר — כרגע העלו Excel/CSV או הזינו ידנית למטה.');}
+    else if(/^(png|jpe?g)$/.test(ext)){recordUpload(file,0,'נשמר · ללא ניתוח');setUpStatus('warn','<b>זיהוי תמונה (OCR) ייתמך בשלב הבא.</b> הקובץ נשמר — כרגע העלו Excel/CSV או הזינו ידנית.');}
+    else{setUpStatus('bad','סוג קובץ זה עדיין לא נתמך. העלו <b>Excel (xlsx)</b> או <b>CSV</b>.');}
+  }catch(e){recordUpload(file,0,'עלה · ניתוח נכשל');setUpStatus('bad','הקובץ עלה בהצלחה, אך לא הצלחנו לזהות נתונים אוטומטית. אפשר לשמור ולהזין ידנית למטה.');}
+}
+function looksNum(c){return /^-?\d[\d,\.]*$/.test(String(c==null?'':c).trim());}
+function looksHeader(row){const kw=/תאריך|מחזור|מזומן|אשראי|עסקא|סה.?כ|עובד|שם|שכר|עלות|ספק|סכום|קטגוריה|תפקיד|שעת|מעביד|כמות|פריט|חשבון|יתרה|תן ?ביס|וולט|משלוח|איסוף|ישיבה/i;
+  return row.some(c=>kw.test(String(c)))&&row.filter(looksNum).length<=1;}
+function rowsToLines(rows){rows=rows.filter(r=>r.some(c=>String(c).trim()!==''));if(!rows.length)return '';
+  const hdr=looksHeader(rows[0]),body=hdr?rows.slice(1):rows;
+  if(hdr&&body.length&&body.every(r=>r.filter(looksNum).length>=2)){const lines=[];
+    body.forEach(r=>rows[0].forEach((h,i)=>{const v=r[i];if(v!=null&&String(v).trim()!==''&&looksNum(v))lines.push(`${String(h).trim()} ${String(v).trim()}`);}));
+    return lines.join('\n');}
+  return body.map(r=>r.map(c=>String(c).trim()).filter(Boolean).join(' ')).filter(Boolean).join('\n');}
+function mapEmpRows(rows){rows=rows.filter(r=>r.some(c=>String(c).trim()!==''));if(!rows.length)return [];
+  const hdr=looksHeader(rows[0])?rows[0]:null,idx={name:-1,role:-1,hourly:-1,employer:-1,hours:-1,total:-1};
+  if(hdr)hdr.forEach((h,i)=>{h=String(h);
+    if(/שם/.test(h)&&idx.name<0)idx.name=i;else if(/תפקיד|תחום/.test(h))idx.role=i;
+    else if(/מעביד|מעסיק/.test(h))idx.employer=i;else if(/לשעה|שעת/.test(h))idx.hourly=i;
+    else if(/שעות|כמות/.test(h))idx.hours=i;else if(/סה.?כ|כולל|total/i.test(h))idx.total=i;
+    else if(/עלות|שכר/.test(h)&&idx.hourly<0)idx.hourly=i;});
+  const body=hdr?rows.slice(1):rows,num=(r,i)=>i>=0&&r[i]!=null&&String(r[i]).trim()!==''?N(String(r[i]).replace(/[^\d.\-]/g,'')):null;
+  return body.map(r=>{if(hdr&&idx.name>=0){const name=String(r[idx.name]||'').trim();if(!name)return null;
+      const rawRole=idx.role>=0?String(r[idx.role]||'').trim():'';
+      return {name,role:rawRole?(ROLE_ALIASES[rawRole]||rawRole):null,cost:num(r,idx.hourly),employer:num(r,idx.employer),hours:num(r,idx.hours),total:num(r,idx.total)};}
+    return parseEmpLine(r.join(' '));}).filter(Boolean);}
+function ingestRows(rows,file){
+  rows=(rows||[]).map(r=>(r||[]).map(c=>c==null?'':String(c))).filter(r=>r.some(c=>c.trim()!==''));
+  if(!rows.length){recordUpload(file,0,'עלה · ריק');setUpStatus('bad','הקובץ עלה בהצלחה, אך לא נמצאו נתונים. אפשר להזין ידנית למטה.');return;}
+  if(DOCTYPE==='emp'){docEmp=mapEmpRows(rows);}
+  else{const lines=rowsToLines(rows);const ta=upEl('doc-txt');if(ta)ta.value=lines;docParsed=parseLines(lines);}
+  const found=DOCTYPE==='emp'?docEmp.length:docParsed.length;
+  recordUpload(file,rows.length,found?'נותח · ממתין לאישור':'עלה · ללא זיהוי');
+  renderDocPreview();
+  if(found)setUpStatus('good',`הקובץ «${file.name}» נקרא — <b>${rows.length}</b> שורות, <b>${found}</b> נתונים זוהו. בדקו את התצוגה המקדימה ואשרו קליטה.`);
+  else setUpStatus('warn',`הקובץ «${file.name}» עלה (${rows.length} שורות) אך לא זוהו נתונים מתאימים לסוג «${DOCS[DOCTYPE].label}». נסו סוג אחר או הזינו ידנית.`);
+}
+function docDrop(ev){ev.preventDefault();ev.currentTarget.classList.remove('drag');const f=ev.dataTransfer&&ev.dataTransfer.files&&ev.dataTransfer.files[0];if(f)handleDocFile(f);}
+function docDrag(ev,on){ev.preventDefault();ev.currentTarget.classList.toggle('drag',on);}
+function delUpload(id){S.uploads=(S.uploads||[]).filter(x=>x.id!==id);save();render();}
 function screenDocs(){const d=DOCS[DOCTYPE];
   return `<div class="card pad" style="max-width:820px;margin-bottom:16px">
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
@@ -1229,15 +1336,28 @@ function screenDocs(){const d=DOCS[DOCTYPE];
   </div>
   <div class="card pad" style="max-width:820px;margin-bottom:16px">
     <div style="font-weight:800;font-size:1.05rem;margin-bottom:2px">${d.icon} ${d.label} <span class="chip good" style="vertical-align:middle">פעיל</span></div>
-    <p style="color:var(--dim);font-size:.86rem;margin:8px 0 12px">${d.hint}. הדביקו את הנתונים ולחצו "נתח מסמך" — תוצג תצוגה מקדימה לפני קליטה.</p>
+    <p style="color:var(--dim);font-size:.86rem;margin:8px 0 12px">${d.hint}. העלו קובץ <b>Excel/CSV</b> מהמחשב — המערכת תקרא, תנתח ותציג תצוגה מקדימה לפני קליטה. אין עדכון ללא אישור.</p>
     ${DOCTYPE==='z'?`<div style="margin-bottom:10px;max-width:220px"><label class="lbl">תאריך הדוח</label><input type="date" id="doc-date" value="${todayISO()}"></div>`:''}
     ${['pl','purch','supp','sales','bal'].includes(DOCTYPE)?`<div style="margin-bottom:10px;max-width:280px"><label class="lbl">תקופה (אופציונלי)</label><input id="doc-period" placeholder="למשל: יוני 2026"></div>`:''}
-    <textarea id="doc-txt" rows="7" class="field" style="resize:vertical;line-height:1.7" placeholder="${d.sample.split('\n')[0]}&#10;${d.sample.split('\n')[1]||''}&#10;…"></textarea>
+    <label class="dropzone" ondragover="docDrag(event,true)" ondragleave="docDrag(event,false)" ondrop="docDrop(event)">
+      <input type="file" id="doc-file" accept=".csv,.xlsx,.xls,.pdf,.png,.jpg,.jpeg" onchange="onDocFile(this)" style="display:none">
+      <div style="width:44px;height:44px;border-radius:12px;background:var(--accent-soft);color:var(--accent-ink);display:grid;place-items:center;margin:0 auto 8px">${svg('up','ic22')}</div>
+      <div style="font-weight:700">בחרו קובץ מהמחשב או גררו לכאן</div>
+      <div style="font-size:.78rem;color:var(--mute);margin-top:3px">Excel (xlsx) · CSV · PDF/תמונה נשמרים לשלב הבא</div></label>
+    <div id="doc-upstatus"></div>
+    <div style="display:flex;align-items:center;gap:10px;margin:14px 0 8px"><div style="flex:1;height:1px;background:var(--border)"></div>
+      <span style="font-size:.76rem;color:var(--mute)">או הזינו / הדביקו ידנית</span><div style="flex:1;height:1px;background:var(--border)"></div></div>
+    <textarea id="doc-txt" rows="6" class="field" style="resize:vertical;line-height:1.7" placeholder="${d.sample.split('\n')[0]}&#10;${d.sample.split('\n')[1]||''}&#10;…"></textarea>
     <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
       <button class="btn" onclick="analyzeDoc()">${svg('search')} נתח מסמך</button>
       <button class="btn ghost" onclick="loadDocSample()">טען דוגמה</button></div>
     <div id="doc-preview" style="margin-top:14px"></div>
   </div>
+  ${(S.uploads&&S.uploads.length)?`<div class="card pad" style="max-width:820px;margin-bottom:16px"><div style="font-weight:700;font-size:.85rem;margin-bottom:10px">מסמכים שהועלו (${S.uploads.length})</div>
+    <div class="grid" style="gap:8px">${S.uploads.slice(0,20).map(u=>{const st=u.status.includes('נקלט')?'good':u.status.includes('נכשל')||u.status.includes('ריק')||u.status.includes('ללא')?'warn':'acc';
+      return `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 11px;background:var(--surface-2);border-radius:10px">
+      <div style="font-size:.85rem;min-width:0"><b>${DOCS[u.type]?DOCS[u.type].icon+' '+DOCS[u.type].label:u.type}</b> <span style="color:var(--mute)">· ${u.file_name}</span>${u.rows?' · '+u.rows+' שורות':''}<div style="font-size:.72rem;color:var(--dim)">${gregS(u.at)}${u.period?' · '+u.period:''}</div></div>
+      <div style="display:flex;align-items:center;gap:8px;flex:0 0 auto">${chip(st,u.status)}<button class="x" onclick="delUpload('${u.id}')">${svg('x')}</button></div></div>`;}).join('')}</div></div>`:''}
   ${(S.analyses&&S.analyses.length)?`<div class="card pad" style="max-width:820px"><div style="font-weight:700;font-size:.85rem;margin-bottom:10px">ניתוחים שמורים (${S.analyses.length})</div>
     <div class="grid" style="gap:8px">${S.analyses.map(a=>`<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 11px;background:var(--surface-2);border-radius:10px">
       <div style="font-size:.85rem;min-width:0"><b>${DOCS[a.type]?DOCS[a.type].label:a.type}</b>${a.period?' · '+a.period:''} <span style="color:var(--mute)">· ${a.summary||''}</span></div>
@@ -1443,5 +1563,6 @@ window.setDocType=setDocType;window.analyzeDoc=analyzeDoc;window.loadDocSample=l
 window.saveSettings=saveSettings;window.sendZ=sendZ;window.render=render;
 window.feasInput=feasInput;window.toggleSel=toggleSel;window.saveEval=saveEval;window.loadEval=loadEval;window.delEval=delEval;window.moveToMenu=moveToMenu;
 window.simCalc=simCalc;window.openDecision=openDecision;window.saveDecision=saveDecision;window.delDecision=delDecision;
+window.onDocFile=onDocFile;window.docDrop=docDrop;window.docDrag=docDrag;window.delUpload=delUpload;
 render();
 </script>
